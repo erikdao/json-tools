@@ -5,9 +5,9 @@
   --paper: #fbf8f1;
   --editor: #fffefb;
   --ink: #1f1a14;
-  --muted: #8a8275;
+  --muted: #6c6557;       /* 4.5:1 on --paper for WCAG AA */
   --border: #e9e2d2;
-  --amber: #b8801a;
+  --amber: #8d5e00;       /* 4.6:1 on --paper for WCAG AA */
   --amber-soft: #f5b647;
   --key: #3f7e5d;
   --str: #8a5b12;

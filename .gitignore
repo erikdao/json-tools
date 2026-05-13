@@ -24,5 +24,9 @@ pnpm-debug.log*
 # project-specific
 .superpowers/
 
+# playwright artifacts
+playwright-report/
+test-results/
+
 # jetbrains setting folder
 .idea/

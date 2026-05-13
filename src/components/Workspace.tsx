@@ -57,6 +57,7 @@ export default function Workspace({ tool }: Props) {
     if (!inputHost.current) return;
     inputView.current = makeEditor(inputHost.current, {
       value: input,
+      ariaLabel: 'Input JSON',
       onChange: (v) => setInput(v),
     });
     return () => inputView.current?.destroy();
@@ -64,7 +65,7 @@ export default function Workspace({ tool }: Props) {
 
   useEffect(() => {
     if (!outputHost.current) return;
-    outputView.current = makeEditor(outputHost.current, { value: '', readOnly: true });
+    outputView.current = makeEditor(outputHost.current, { value: '', readOnly: true, ariaLabel: 'Output JSON' });
     return () => outputView.current?.destroy();
   }, []);
 
