@@ -124,6 +124,24 @@ export default function Workspace({ tool }: Props) {
     v?.focus();
   };
 
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(output);
+      setStatus('copied');
+    } catch {
+      setStatus("Couldn't copy — your browser blocked clipboard access");
+    }
+  };
+
+  const download = () => {
+    const blob = new Blob([output], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${tool}-output.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   return (
     <div class="grid grid-cols-1 md:grid-cols-[1fr_56px_1fr] gap-0 border border-[var(--border)] rounded-md overflow-hidden">
       <div
@@ -142,7 +160,25 @@ export default function Workspace({ tool }: Props) {
           {tool.toUpperCase()} ▶
         </button>
       </div>
-      <div ref={outputHost} class="min-h-[60vh]" />
+      <div class="flex flex-col">
+        <div ref={outputHost} class="min-h-[60vh]" />
+        <div class="flex gap-3 text-xs px-3 py-1.5 border-t" style="border-color: var(--border)">
+          <button
+            onClick={copy}
+            disabled={!output}
+            class="text-[var(--muted)] hover:text-[var(--amber)] disabled:opacity-40"
+          >
+            copy
+          </button>
+          <button
+            onClick={download}
+            disabled={!output}
+            class="text-[var(--muted)] hover:text-[var(--amber)] disabled:opacity-40"
+          >
+            download
+          </button>
+        </div>
+      </div>
       <div class="col-span-full">
         <div class="flex items-center justify-between px-3 py-1.5 border-t" style="border-color: var(--border)">
           <div class="flex items-center gap-3">
