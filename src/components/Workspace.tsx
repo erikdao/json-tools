@@ -1,11 +1,12 @@
 // src/components/Workspace.tsx
 import { useState, useEffect, useRef } from 'preact/hooks';
-import type { BeautifyOptions, JsonError, Tool, Result } from '@/lib/json/types';
+import type { BeautifyOptions, JsonError, Tool, Result, TreeNode } from '@/lib/json/types';
 import { beautify, minify, validate, buildTree } from '@/lib/json';
 import { makeEditor } from '@/lib/editor';
 import type { EditorView } from '@codemirror/view';
 import StatusBar from './StatusBar';
 import ToolOptions from './ToolOptions';
+import TreeExplorer from './TreeExplorer';
 import { readFiles } from '@/lib/fileInput';
 import { loadState, saveState, clearState } from '@/lib/storage';
 
@@ -17,6 +18,7 @@ export default function Workspace({ tool }: Props) {
   const [error, setError] = useState<JsonError | null>(null);
   const [status, setStatus] = useState('');
   const [opts, setOpts] = useState<BeautifyOptions>({ indent: 2, sortKeys: false });
+  const [tree, setTree] = useState<TreeNode | null>(null);
 
   const inputHost = useRef<HTMLDivElement>(null);
   const inputView = useRef<EditorView | null>(null);
@@ -126,12 +128,31 @@ export default function Workspace({ tool }: Props) {
   };
 
   const run = () => {
+    if (tool === 'parse') {
+      const r = buildTree(input);
+      if (r.ok) {
+        setTree(r.tree);
+        setError(null);
+        setStatus('parsed');
+      } else {
+        setTree(null);
+        setError(r.error);
+        setStatus('');
+        const v = inputView.current;
+        if (v && r.error) {
+          v.dispatch({
+            selection: { anchor: r.error.offsetStart, head: r.error.offsetEnd },
+            scrollIntoView: true,
+          });
+        }
+      }
+      return;
+    }
     const r = runTool(tool, input, opts);
     if (r.ok) {
       setOutput(r.output);
       setError(null);
       if (tool === 'validate') setStatus(`valid · ${r.stats.keys} keys · depth ${r.stats.depth} · ${r.stats.bytes} B`);
-      else if (tool === 'parse') setStatus('parsed');
       else setStatus(`${tool}d · ${r.stats.bytes} B`);
     } else {
       setOutput('');
@@ -215,7 +236,9 @@ export default function Workspace({ tool }: Props) {
         </button>
       </div>
       <div class="flex flex-col">
-        <div ref={outputHost} class="min-h-[60vh]" />
+        {tool === 'parse'
+          ? <div class="min-h-[60vh] bg-[var(--editor)] overflow-auto">{tree && <TreeExplorer tree={tree} />}</div>
+          : <div ref={outputHost} class="min-h-[60vh]" />}
         <div class="flex gap-3 text-xs px-3 py-1.5 border-t" style="border-color: var(--border)">
           <button
             onClick={copy}
