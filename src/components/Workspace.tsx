@@ -7,6 +7,7 @@ import type { EditorView } from '@codemirror/view';
 import StatusBar from './StatusBar';
 import ToolOptions from './ToolOptions';
 import { readFiles } from '@/lib/fileInput';
+import { loadState, saveState, clearState } from '@/lib/storage';
 
 type Props = { tool: Tool };
 
@@ -36,6 +37,17 @@ export default function Workspace({ tool }: Props) {
   }, []);
 
   useEffect(() => {
+    const s = loadState();
+    if (s && s.tool === tool) {
+      setInput(s.input);
+      setOpts(s.options);
+      inputView.current?.dispatch({
+        changes: { from: 0, to: inputView.current.state.doc.length, insert: s.input }
+      });
+    }
+  }, []);
+
+  useEffect(() => {
     if (!inputHost.current) return;
     inputView.current = makeEditor(inputHost.current, {
       value: input,
@@ -55,6 +67,19 @@ export default function Workspace({ tool }: Props) {
     if (!v) return;
     v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: output } });
   }, [output]);
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      saveState({
+        schemaVersion: 1,
+        input,
+        tool,
+        options: opts,
+        theme: loadState()?.theme ?? 'auto',
+      });
+    }, 150);
+    return () => clearTimeout(id);
+  }, [input, tool, opts]);
 
   function runTool(tool: Tool, src: string, opts: BeautifyOptions): Result {
     switch (tool) {
@@ -217,6 +242,14 @@ export default function Workspace({ tool }: Props) {
             >
               upload file
             </button>
+            <button onClick={() => {
+              clearState();
+              setInput(''); setOutput(''); setError(null);
+              inputView.current?.dispatch({
+                changes: { from: 0, to: inputView.current.state.doc.length, insert: '' }
+              });
+            }}
+              class="text-xs text-[var(--muted)] hover:text-[var(--amber)]">clear</button>
             <ToolOptions tool={tool} opts={opts} onChange={updateOpts} />
           </div>
         </div>
