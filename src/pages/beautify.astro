@@ -3,6 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import TabStrip from '../components/TabStrip.astro';
+import Workspace from '../components/Workspace';
 ---
 <BaseLayout title="Beautify JSON — jsontools"
             description="Format and pretty-print JSON in your browser. Free, no tracking.">
@@ -10,8 +11,7 @@ import TabStrip from '../components/TabStrip.astro';
     <Header />
     <TabStrip active="beautify" />
     <main class="flex-1 px-2 py-2">
-      <!-- Workspace island slotted in Task 19 -->
-      <div id="workspace-root" data-tool="beautify"></div>
+      <Workspace tool="beautify" client:load />
     </main>
     <Footer />
   </div>
