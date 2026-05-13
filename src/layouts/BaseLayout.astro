@@ -1,14 +1,42 @@
 ---
 import '../styles/global.css';
-const { title = 'jsontools' } = Astro.props;
+type Props = { title?: string; description?: string; canonical?: string };
+const {
+  title = 'jsontools — beautify, minify, validate, parse JSON',
+  description = 'A fast, beautiful, client-only JSON workspace. No tracking, no accounts.',
+  canonical,
+} = Astro.props as Props;
+const url = canonical ?? new URL(Astro.url.pathname, 'https://jsontools.erikdao.com').href;
 ---
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={url} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={url} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+    {/* Theme bootstrap: read localStorage and set data-theme before paint to avoid flash */}
+    <script is:inline>
+      (() => {
+        try {
+          const raw = localStorage.getItem('jsontools:v1');
+          const theme = raw ? (JSON.parse(raw).theme ?? 'auto') : 'auto';
+          if (theme !== 'auto') document.documentElement.setAttribute('data-theme', theme);
+        } catch { /* ignore */ }
+      })();
+    </script>
   </head>
-  <body class="bg-amber-50 text-stone-900 font-sans">
+  <body>
     <slot />
+    <!-- Cloudflare Web Analytics -->
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "REPLACE_AFTER_DEPLOY"}'></script>
   </body>
 </html>
