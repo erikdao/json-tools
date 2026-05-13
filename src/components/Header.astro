@@ -1,0 +1,13 @@
+---
+import ThemeToggle from './ThemeToggle';
+---
+<header class="flex items-center justify-between px-4 py-3 border-b" style="border-color: var(--border)">
+  <a href="/beautify" class="font-semibold tracking-tight text-[var(--ink)]">
+    jsontools<span class="text-[var(--amber)] blink">_</span>
+  </a>
+  <div class="flex items-center gap-4">
+    <ThemeToggle client:load />
+    <a href="https://github.com/erikdao/json-tools" rel="noopener"
+       class="text-xs text-[var(--muted)] hover:text-[var(--amber)]">Source ↗</a>
+  </div>
+</header>
