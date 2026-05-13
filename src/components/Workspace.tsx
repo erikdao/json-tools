@@ -246,6 +246,7 @@ export default function Workspace({ tool }: Props) {
       <div class="flex items-center justify-center bg-[var(--paper)] border-x border-[var(--border)]">
         <button
           onClick={run}
+          aria-label={`Run ${tool}`}
           class="text-[var(--amber)] border border-[var(--amber)] px-2 py-2 [writing-mode:vertical-rl] text-xs tracking-widest">
           {tool.toUpperCase()} ▶
         </button>
@@ -258,6 +259,7 @@ export default function Workspace({ tool }: Props) {
           <button
             onClick={copy}
             disabled={!output}
+            aria-label="Copy output"
             class="text-[var(--muted)] hover:text-[var(--amber)] disabled:opacity-40"
           >
             copy
@@ -265,6 +267,7 @@ export default function Workspace({ tool }: Props) {
           <button
             onClick={download}
             disabled={!output}
+            aria-label="Download output"
             class="text-[var(--muted)] hover:text-[var(--amber)] disabled:opacity-40"
           >
             download
@@ -283,6 +286,7 @@ export default function Workspace({ tool }: Props) {
             />
             <button
               onClick={() => fileRef.current?.click()}
+              aria-label="Upload JSON file"
               class="text-xs text-[var(--muted)] hover:text-[var(--amber)]"
             >
               upload file
@@ -294,6 +298,7 @@ export default function Workspace({ tool }: Props) {
                 changes: { from: 0, to: inputView.current.state.doc.length, insert: '' }
               });
             }}
+              aria-label="Clear input"
               class="text-xs text-[var(--muted)] hover:text-[var(--amber)]">clear</button>
             <ToolOptions tool={tool} opts={opts} onChange={updateOpts} />
           </div>
