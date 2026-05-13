@@ -1,0 +1,2255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>jsontools.erikdao.com — Implementation Plan</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper:#fbf8f1; --ink:#1f1a14; --muted:#6c635a; --border:#e6dccb; --amber:#b8801a;
+    --code-bg:#0d0f12; --code-text:#d8d8c2; --code-muted:#6c7480; --code-amber:#f5b647;
+    --code-key:#7fc8a9; --code-str:#e5b870; --code-bool:#c594e3;
+  }
+  html{font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:var(--paper);}
+  code,pre,.mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+  pre{background:var(--code-bg);color:var(--code-text);border:1px solid #1f242a;border-radius:6px;padding:0.85rem 1rem;overflow-x:auto;font-size:12.5px;line-height:1.55;margin:.5rem 0;}
+  pre .k{color:var(--code-key);} pre .s{color:var(--code-str);} pre .b{color:var(--code-bool);} pre .c{color:var(--code-muted);} pre .a{color:var(--code-amber);}
+  .accent{color:var(--amber);}
+  .meta{color:var(--muted);}
+  .phase{border-top:2px solid var(--amber);padding-top:1.25rem;margin-top:2.5rem;}
+  .task{border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;margin:1rem 0;background:#fffefb;}
+  .task h3{margin:0 0 .5rem 0;font-size:1.1rem;font-weight:600;letter-spacing:-0.01em;}
+  .task .files{font-size:13px;background:#f6f1e8;border-radius:4px;padding:.5rem .75rem;margin:.5rem 0;}
+  .task .files code{font-size:12px;}
+  .step{margin:.65rem 0;}
+  .step .cb{display:inline-block;font-family:'JetBrains Mono',monospace;color:var(--amber);font-weight:600;margin-right:.35rem;}
+  .step .label{font-weight:600;}
+  .callout{background:#f6f1e8;border-left:3px solid var(--amber);padding:.6rem .9rem;border-radius:0 4px 4px 0;margin:.75rem 0;font-size:14px;}
+  h2{font-size:1.6rem;font-weight:600;letter-spacing:-0.015em;}
+  h1{font-size:2.25rem;font-weight:600;letter-spacing:-0.02em;margin-bottom:.25rem;}
+  .toc a{color:var(--amber);text-decoration:none;}
+  .toc a:hover{text-decoration:underline;text-underline-offset:3px;}
+  .blink{animation:blink 1s steps(2) infinite;} @keyframes blink{50%{opacity:0;}}
+  @media (prefers-reduced-motion: reduce){.blink{animation:none;}}
+</style>
+</head>
+<body class="max-w-4xl mx-auto px-6 py-12">
+
+<header class="mb-10">
+  <div class="meta mono text-sm mb-2">jsontools.erikdao.com<span class="blink">_</span></div>
+  <h1>Implementation Plan</h1>
+  <p class="meta text-sm">2026-05-13 · Based on spec <code class="mono">docs/superpowers/specs/2026-05-13-json-tools-design.html</code> (commit <code class="mono">979e527</code>)</p>
+</header>
+
+<section class="callout text-sm">
+  <p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL — use <code class="mono">superpowers:subagent-driven-development</code> (recommended) or <code class="mono">superpowers:executing-plans</code> to implement task-by-task. Each step's literal <code class="mono">- [ ]</code> marker is the tracking checkbox; replace with <code class="mono">- [x]</code> on completion.</p>
+</section>
+
+<section class="my-6">
+  <p><strong>Goal.</strong> Build a fast, beautiful, client-only JSON workspace (beautify / minify / validate / parse) at <code class="mono">jsontools.erikdao.com</code>, deployed to Cloudflare Pages.</p>
+  <p class="mt-2"><strong>Architecture.</strong> Astro 5 with one Preact island (Workspace) hosting two CodeMirror 6 instances. Pure tool functions in <code class="mono">lib/json/</code>. URL routes per tool (<code class="mono">/beautify</code>, <code class="mono">/minify</code>, <code class="mono">/validate</code>, <code class="mono">/parse</code>); <code class="mono">/</code> redirects to <code class="mono">/beautify</code>. All processing on the main thread (≤5 MB budget). Terminal-mono aesthetic with honey-amber accent in light + dark.</p>
+  <p class="mt-2"><strong>Stack.</strong> Bun (PM) · Astro 5 · TypeScript · Preact (<code class="mono">@astrojs/preact</code>) · Tailwind v4 (<code class="mono">@tailwindcss/vite</code>) · CodeMirror 6 + <code class="mono">@codemirror/lang-json</code> · Biome (lint + format) · Vitest (unit + component, <code class="mono">@testing-library/preact</code>) · Playwright + <code class="mono">@axe-core/playwright</code> (e2e + a11y) · Cloudflare Pages + Cloudflare Web Analytics.</p>
+</section>
+
+<nav class="toc text-sm mb-8">
+  <p class="mono accent mb-1">phases</p>
+  <ol class="list-decimal list-inside space-y-1 meta">
+    <li><a href="#p0">Phase 0 — Foundation</a> · Tasks 1–4</li>
+    <li><a href="#p1">Phase 1 — Pure JSON logic (TDD)</a> · Tasks 5–12</li>
+    <li><a href="#p2">Phase 2 — Styling &amp; layout</a> · Tasks 13–14</li>
+    <li><a href="#p3">Phase 3 — Static chrome &amp; routing</a> · Tasks 15–18</li>
+    <li><a href="#p4">Phase 4 — Workspace &amp; CodeMirror</a> · Tasks 19–24</li>
+    <li><a href="#p5">Phase 5 — Interactions</a> · Tasks 25–29</li>
+    <li><a href="#p6">Phase 6 — Tree explorer</a> · Tasks 30–32</li>
+    <li><a href="#p7">Phase 7 — Edge cases &amp; a11y</a> · Tasks 33–35</li>
+    <li><a href="#p8">Phase 8 — E2E &amp; CI</a> · Tasks 36–37</li>
+    <li><a href="#p9">Phase 9 — Deploy</a> · Task 38</li>
+  </ol>
+</nav>
+
+<!-- =========================== PHASE 0 =========================== -->
+<section id="p0" class="phase">
+<h2>Phase 0 · Foundation</h2>
+<p class="meta text-sm">Get the empty repo to a state where <code class="mono">bun run dev</code> shows a styled Astro page with Preact and Tailwind v4 working, plus Biome / Vitest / Playwright wired but not yet exercised.</p>
+
+<!-- T1 -->
+<div class="task">
+<h3>Task 1 · Scaffold Astro project with Bun</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">package.json</code>, <code class="mono">astro.config.mjs</code>, <code class="mono">tsconfig.json</code>, <code class="mono">src/pages/index.astro</code>, <code class="mono">bun.lock</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Verify Bun is installed</span><br>
+Run: <code class="mono">bun --version</code> · Expected: any 1.x.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Scaffold Astro into the current directory (preserving existing files)</span>
+<pre>bun create astro@latest . --template minimal --typescript strict --install false --no-git</pre>
+When prompted about non-empty directory, answer <em>Yes — continue</em>. Existing files (<code>CLAUDE.md</code>, <code>.gitignore</code>, <code>docs/</code>) must remain.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Install dependencies with Bun</span>
+<pre>bun install</pre>
+Expected: creates <code class="mono">bun.lock</code> and <code class="mono">node_modules/</code>.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Verify dev server boots</span>
+<pre>bun run dev</pre>
+Expected: prints <code class="mono">Local: http://localhost:4321/</code>. Visit it; default Astro page should render. Stop with <kbd>Ctrl+C</kbd>.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 5: Append <code class="mono">node_modules</code> and <code class="mono">dist</code> to <code class="mono">.gitignore</code></span>
+<pre><span class="c"># existing entries kept</span>
+node_modules
+dist
+.astro</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 6: Commit</span>
+<pre>git add -A
+git commit -m "chore: scaffold astro 5 project with bun"</pre></div>
+</div>
+
+<!-- T2 -->
+<div class="task">
+<h3>Task 2 · Add Preact integration + Tailwind v4</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">astro.config.mjs</code>, <code class="mono">package.json</code> · <strong>Create:</strong> <code class="mono">src/styles/global.css</code>, <code class="mono">src/layouts/BaseLayout.astro</code> (placeholder)</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Add Preact + signals via Astro CLI</span>
+<pre>bunx astro add preact --yes</pre>
+This installs <code class="mono">@astrojs/preact</code>, <code class="mono">preact</code>, and edits <code class="mono">astro.config.mjs</code> to add the integration. Confirm by reading the file.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Install Preact signals (used for Workspace state)</span>
+<pre>bun add @preact/signals</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Install Tailwind v4 via the Vite plugin (the v4 way — no PostCSS file needed)</span>
+<pre>bun add tailwindcss @tailwindcss/vite</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Wire Tailwind into <code class="mono">astro.config.mjs</code></span>
+<pre><span class="a">import</span> { defineConfig } <span class="a">from</span> <span class="s">'astro/config'</span>;
+<span class="a">import</span> preact <span class="a">from</span> <span class="s">'@astrojs/preact'</span>;
+<span class="a">import</span> tailwindcss <span class="a">from</span> <span class="s">'@tailwindcss/vite'</span>;
+
+<span class="a">export default</span> defineConfig({
+  integrations: [preact()],
+  vite: { plugins: [tailwindcss()] },
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 5: Create <code class="mono">src/styles/global.css</code></span>
+<pre><span class="a">@import</span> <span class="s">"tailwindcss"</span>;</pre>
+(More tokens come in Task 13. This is the minimum to verify the plugin works.)</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 6: Create a minimal <code class="mono">src/layouts/BaseLayout.astro</code></span>
+<pre><span class="c">---</span>
+<span class="a">import</span> <span class="s">'../styles/global.css'</span>;
+<span class="k">const</span> { title = <span class="s">'jsontools'</span> } = Astro.props;
+<span class="c">---</span>
+&lt;<span class="k">html</span> <span class="k">lang</span>=<span class="s">"en"</span>&gt;
+  &lt;<span class="k">head</span>&gt;
+    &lt;<span class="k">meta</span> <span class="k">charset</span>=<span class="s">"UTF-8"</span> /&gt;
+    &lt;<span class="k">meta</span> <span class="k">name</span>=<span class="s">"viewport"</span> <span class="k">content</span>=<span class="s">"width=device-width, initial-scale=1"</span> /&gt;
+    &lt;<span class="k">title</span>&gt;{title}&lt;/<span class="k">title</span>&gt;
+  &lt;/<span class="k">head</span>&gt;
+  &lt;<span class="k">body</span> <span class="k">class</span>=<span class="s">"bg-amber-50 text-stone-900 font-sans"</span>&gt;
+    &lt;<span class="k">slot</span> /&gt;
+  &lt;/<span class="k">body</span>&gt;
+&lt;/<span class="k">html</span>&gt;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 7: Update <code class="mono">src/pages/index.astro</code> to use the layout</span>
+<pre><span class="c">---</span>
+<span class="a">import</span> BaseLayout <span class="a">from</span> <span class="s">'../layouts/BaseLayout.astro'</span>;
+<span class="c">---</span>
+&lt;BaseLayout title=<span class="s">"jsontools"</span>&gt;
+  &lt;<span class="k">main</span> <span class="k">class</span>=<span class="s">"p-8"</span>&gt;
+    &lt;<span class="k">h1</span> <span class="k">class</span>=<span class="s">"text-2xl font-semibold"</span>&gt;hello&lt;/<span class="k">h1</span>&gt;
+  &lt;/<span class="k">main</span>&gt;
+&lt;/BaseLayout&gt;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 8: Verify Tailwind + Preact work</span>
+<pre>bun run dev</pre>
+Visit <code class="mono">http://localhost:4321</code> — page should show "hello" with Tailwind styles (amber background, large bold heading).</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 9: Commit</span>
+<pre>git add -A
+git commit -m "chore: add preact + tailwind v4 integrations"</pre></div>
+</div>
+
+<!-- T3 -->
+<div class="task">
+<h3>Task 3 · Add Biome (lint + format), Vitest, and Playwright</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">biome.json</code>, <code class="mono">vitest.config.ts</code>, <code class="mono">playwright.config.ts</code>, <code class="mono">tests/unit/.gitkeep</code>, <code class="mono">tests/e2e/.gitkeep</code> · <strong>Modify:</strong> <code class="mono">package.json</code> (scripts)</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Install dev tooling</span>
+<pre>bun add -d @biomejs/biome vitest @testing-library/preact @testing-library/jest-dom jsdom @vitest/coverage-v8
+bun add -d @playwright/test @axe-core/playwright
+bunx playwright install chromium webkit</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Initialize Biome config</span>
+<pre>bunx biome init</pre>
+Then edit <code class="mono">biome.json</code> to:
+<pre>{
+  <span class="k">"$schema"</span>: <span class="s">"https://biomejs.dev/schemas/1.9.4/schema.json"</span>,
+  <span class="k">"organizeImports"</span>: { <span class="k">"enabled"</span>: <span class="b">true</span> },
+  <span class="k">"linter"</span>: {
+    <span class="k">"enabled"</span>: <span class="b">true</span>,
+    <span class="k">"rules"</span>: { <span class="k">"recommended"</span>: <span class="b">true</span> }
+  },
+  <span class="k">"formatter"</span>: {
+    <span class="k">"enabled"</span>: <span class="b">true</span>,
+    <span class="k">"indentStyle"</span>: <span class="s">"space"</span>,
+    <span class="k">"indentWidth"</span>: <span class="a">2</span>,
+    <span class="k">"lineWidth"</span>: <span class="a">100</span>
+  },
+  <span class="k">"javascript"</span>: { <span class="k">"formatter"</span>: { <span class="k">"quoteStyle"</span>: <span class="s">"single"</span> } },
+  <span class="k">"files"</span>: { <span class="k">"ignore"</span>: [<span class="s">"dist"</span>, <span class="s">".astro"</span>, <span class="s">"node_modules"</span>] }
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Create <code class="mono">vitest.config.ts</code></span>
+<pre><span class="a">import</span> { defineConfig } <span class="a">from</span> <span class="s">'vitest/config'</span>;
+<span class="a">import</span> preact <span class="a">from</span> <span class="s">'@preact/preset-vite'</span>;
+
+<span class="a">export default</span> defineConfig({
+  plugins: [preact()],
+  test: {
+    environment: <span class="s">'jsdom'</span>,
+    globals: <span class="b">true</span>,
+    setupFiles: [<span class="s">'./tests/unit/setup.ts'</span>],
+    include: [<span class="s">'tests/unit/**/*.test.{ts,tsx}'</span>],
+    coverage: { include: [<span class="s">'src/lib/**'</span>], reporter: [<span class="s">'text'</span>, <span class="s">'lcov'</span>] },
+  },
+  resolve: {
+    alias: { <span class="s">'@'</span>: <span class="s">'/src'</span> },
+  },
+});</pre>
+Install the Vite plugin: <code class="mono">bun add -d @preact/preset-vite</code>.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Create <code class="mono">tests/unit/setup.ts</code></span>
+<pre><span class="a">import</span> <span class="s">'@testing-library/jest-dom/vitest'</span>;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 5: Create <code class="mono">playwright.config.ts</code></span>
+<pre><span class="a">import</span> { defineConfig, devices } <span class="a">from</span> <span class="s">'@playwright/test'</span>;
+
+<span class="a">export default</span> defineConfig({
+  testDir: <span class="s">'./tests/e2e'</span>,
+  fullyParallel: <span class="b">true</span>,
+  retries: process.env.CI ? <span class="a">2</span> : <span class="a">0</span>,
+  reporter: process.env.CI ? <span class="s">'github'</span> : <span class="s">'list'</span>,
+  use: { baseURL: <span class="s">'http://localhost:4321'</span>, trace: <span class="s">'on-first-retry'</span> },
+  projects: [
+    { name: <span class="s">'chromium'</span>, use: { ...devices[<span class="s">'Desktop Chrome'</span>] } },
+    { name: <span class="s">'webkit'</span>,   use: { ...devices[<span class="s">'Desktop Safari'</span>] } },
+  ],
+  webServer: {
+    command: <span class="s">'bun run preview'</span>,
+    url: <span class="s">'http://localhost:4321'</span>,
+    reuseExistingServer: !process.env.CI,
+    timeout: <span class="a">60_000</span>,
+  },
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 6: Add scripts to <code class="mono">package.json</code></span>
+<pre><span class="k">"scripts"</span>: {
+  <span class="k">"dev"</span>:        <span class="s">"astro dev"</span>,
+  <span class="k">"build"</span>:      <span class="s">"astro build"</span>,
+  <span class="k">"preview"</span>:    <span class="s">"astro preview --port 4321"</span>,
+  <span class="k">"typecheck"</span>:  <span class="s">"astro check &amp;&amp; tsc --noEmit"</span>,
+  <span class="k">"lint"</span>:       <span class="s">"biome check ."</span>,
+  <span class="k">"fmt"</span>:        <span class="s">"biome format --write ."</span>,
+  <span class="k">"test"</span>:       <span class="s">"vitest run"</span>,
+  <span class="k">"test:watch"</span>: <span class="s">"vitest"</span>,
+  <span class="k">"test:e2e"</span>:   <span class="s">"playwright test"</span>
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 7: Verify each runner starts</span>
+<pre>bun run lint        <span class="c"># expect "No fixes applied" or similar</span>
+bun run typecheck   <span class="c"># expect 0 errors</span>
+bun run test        <span class="c"># expect "No test files found"</span></pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 8: Commit</span>
+<pre>git add -A
+git commit -m "chore: add biome, vitest, playwright tooling"</pre></div>
+</div>
+
+<!-- T4 -->
+<div class="task">
+<h3>Task 4 · Establish directory structure &amp; TS path aliases</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/components/.gitkeep</code>, <code class="mono">src/lib/json/.gitkeep</code>, <code class="mono">tests/unit/lib/.gitkeep</code>, <code class="mono">tests/fixtures/.gitkeep</code> · <strong>Modify:</strong> <code class="mono">tsconfig.json</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Create directory layout matching the spec</span>
+<pre>mkdir -p src/components src/lib/json src/layouts tests/unit/lib tests/e2e tests/fixtures public
+touch src/components/.gitkeep src/lib/json/.gitkeep tests/unit/lib/.gitkeep tests/fixtures/.gitkeep</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Add path alias <code class="mono">@/*</code> in <code class="mono">tsconfig.json</code></span>
+Inside <code class="mono">compilerOptions</code>:
+<pre><span class="k">"baseUrl"</span>: <span class="s">"."</span>,
+<span class="k">"paths"</span>: { <span class="k">"@/*"</span>: [<span class="s">"src/*"</span>] }</pre>
+(Vite + Vitest aliases were set in T3 Step 3.)</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Verify alias works — typecheck must still pass</span>
+<pre>bun run typecheck</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Commit</span>
+<pre>git add -A
+git commit -m "chore: scaffold src + tests directory layout"</pre></div>
+</div>
+</section>
+
+<!-- =========================== PHASE 1 =========================== -->
+<section id="p1" class="phase">
+<h2>Phase 1 · Pure JSON logic (TDD)</h2>
+<p class="meta text-sm">Build every <code class="mono">lib/json/</code> module test-first. Pure functions, no DOM. Target: <strong>&gt;95% line coverage</strong> on this directory.</p>
+
+<!-- T5 -->
+<div class="task">
+<h3>Task 5 · Define shared types</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/lib/json/types.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Write the types</span>
+<pre><span class="c">// src/lib/json/types.ts</span>
+<span class="a">export type</span> JsonError = {
+  line: <span class="k">number</span>;
+  column: <span class="k">number</span>;
+  offsetStart: <span class="k">number</span>;
+  offsetEnd: <span class="k">number</span>;
+  message: <span class="k">string</span>;
+  hint?: <span class="k">string</span>;
+};
+
+<span class="a">export type</span> Stats = {
+  bytes: <span class="k">number</span>;
+  keys: <span class="k">number</span>;
+  depth: <span class="k">number</span>;
+};
+
+<span class="a">export type</span> Result =
+  | { ok: <span class="b">true</span>;  output: <span class="k">string</span>; stats: Stats; notices?: <span class="k">string</span>[] }
+  | { ok: <span class="b">false</span>; error: JsonError; stats: <span class="b">null</span>; notices?: <span class="k">string</span>[] };
+
+<span class="a">export type</span> BeautifyOptions = { indent: <span class="a">2</span> | <span class="a">4</span> | <span class="s">'\t'</span>; sortKeys: <span class="k">boolean</span> };
+
+<span class="a">export type</span> Tool = <span class="s">'beautify'</span> | <span class="s">'minify'</span> | <span class="s">'validate'</span> | <span class="s">'parse'</span>;
+
+<span class="c">// Tree for /parse</span>
+<span class="a">export type</span> TreeNode =
+  | { kind: <span class="s">'object'</span>; key: <span class="k">string</span> | <span class="k">number</span> | <span class="b">null</span>; path: <span class="k">string</span>; children: TreeNode[] }
+  | { kind: <span class="s">'array'</span>;  key: <span class="k">string</span> | <span class="k">number</span> | <span class="b">null</span>; path: <span class="k">string</span>; children: TreeNode[] }
+  | { kind: <span class="s">'string'</span> | <span class="s">'number'</span> | <span class="s">'boolean'</span> | <span class="s">'null'</span>;
+      key: <span class="k">string</span> | <span class="k">number</span> | <span class="b">null</span>; path: <span class="k">string</span>; value: <span class="k">unknown</span> };</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Verify typecheck</span>
+<pre>bun run typecheck</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Commit</span>
+<pre>git add src/lib/json/types.ts
+git commit -m "feat(lib): add shared JSON types"</pre></div>
+</div>
+
+<!-- T6 -->
+<div class="task">
+<h3>Task 6 · Error normalization &amp; hint catalog (TDD)</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/lib/json/errors.ts</code>, <code class="mono">tests/unit/lib/errors.test.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Write the failing tests</span>
+<pre><span class="c">// tests/unit/lib/errors.test.ts</span>
+<span class="a">import</span> { describe, it, expect } <span class="a">from</span> <span class="s">'vitest'</span>;
+<span class="a">import</span> { normalizeJsonError } <span class="a">from</span> <span class="s">'@/lib/json/errors'</span>;
+
+<span class="k">function</span> parseError(src: <span class="k">string</span>) {
+  <span class="a">try</span> { JSON.parse(src); <span class="a">throw new Error</span>(<span class="s">'expected throw'</span>); }
+  <span class="a">catch</span> (e) { <span class="a">return</span> normalizeJsonError(src, e <span class="a">as</span> Error); }
+}
+
+describe(<span class="s">'normalizeJsonError'</span>, () =&gt; {
+  it(<span class="s">'locates a trailing comma before }'</span>, () =&gt; {
+    <span class="k">const</span> e = parseError(<span class="s">'{ "a": 1, }'</span>);
+    expect(e.line).<span class="a">toBe</span>(<span class="a">1</span>);
+    expect(e.column).<span class="a">toBeGreaterThanOrEqual</span>(<span class="a">10</span>);
+    expect(e.hint).<span class="a">toMatch</span>(<span class="s">/trailing comma/i</span>);
+  });
+
+  it(<span class="s">'flags single quotes'</span>, () =&gt; {
+    <span class="k">const</span> e = parseError(<span class="s">"{ 'a': 1 }"</span>);
+    expect(e.hint).<span class="a">toMatch</span>(<span class="s">/single quotes/i</span>);
+  });
+
+  it(<span class="s">'flags unquoted keys'</span>, () =&gt; {
+    <span class="k">const</span> e = parseError(<span class="s">'{ a: 1 }'</span>);
+    expect(e.hint).<span class="a">toMatch</span>(<span class="s">/quoted/i</span>);
+  });
+
+  it(<span class="s">'flags unterminated input'</span>, () =&gt; {
+    <span class="k">const</span> e = parseError(<span class="s">'{ "a":'</span>);
+    expect(e.hint).<span class="a">toMatch</span>(<span class="s">/ends mid-value|missing/i</span>);
+  });
+
+  it(<span class="s">'reports line/column on multi-line input'</span>, () =&gt; {
+    <span class="k">const</span> src = <span class="s">'{\n  "a": 1,\n  "b": ,\n}'</span>;
+    <span class="k">const</span> e = parseError(src);
+    expect(e.line).<span class="a">toBe</span>(<span class="a">3</span>);
+    expect(e.column).<span class="a">toBeGreaterThan</span>(<span class="a">0</span>);
+  });
+
+  it(<span class="s">'returns no hint when the message has no match'</span>, () =&gt; {
+    <span class="k">const</span> e = parseError(<span class="s">'@@@'</span>);
+    expect(e.message).<span class="a">toBeTruthy</span>();
+  });
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Run tests to confirm they fail</span>
+<pre>bun run test errors</pre>
+Expected: <em>Failed to resolve import '@/lib/json/errors'</em>.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Implement <code class="mono">src/lib/json/errors.ts</code></span>
+<pre><span class="c">// src/lib/json/errors.ts</span>
+<span class="a">import type</span> { JsonError } <span class="a">from</span> <span class="s">'./types'</span>;
+
+<span class="k">const</span> HINTS: ReadonlyArray&lt;{ test: <span class="k">RegExp</span>; hint: <span class="k">string</span> }&gt; = [
+  { test: <span class="s">/Unexpected token '?'/i</span>,         hint: <span class="s">"Single quotes aren't valid JSON — use double quotes."</span> },
+  { test: <span class="s">/Unexpected token .{0,4}}/</span>,         hint: <span class="s">'Trailing comma before } — JSON does not allow it.'</span> },
+  { test: <span class="s">/Unexpected token .{0,4}]/</span>,         hint: <span class="s">'Trailing comma before ] — JSON does not allow it.'</span> },
+  { test: <span class="s">/Unexpected end of (?:JSON|input)/i</span>, hint: <span class="s">'Input ends mid-value — missing }, ], or closing ".'</span> },
+  { test: <span class="s">/Unexpected token [A-Za-z_]/</span>,      hint: <span class="s">'Keys must be quoted strings — wrap identifiers in "double quotes".'</span> },
+];
+
+<span class="k">function</span> offsetToLineCol(src: <span class="k">string</span>, offset: <span class="k">number</span>): { line: <span class="k">number</span>; column: <span class="k">number</span> } {
+  <span class="k">let</span> line = <span class="a">1</span>, col = <span class="a">1</span>;
+  <span class="a">for</span> (<span class="k">let</span> i = <span class="a">0</span>; i &lt; offset &amp;&amp; i &lt; src.length; i++) {
+    <span class="a">if</span> (src[i] === <span class="s">'\n'</span>) { line++; col = <span class="a">1</span>; } <span class="a">else</span> { col++; }
+  }
+  <span class="a">return</span> { line, column: col };
+}
+
+<span class="k">function</span> extractOffset(src: <span class="k">string</span>, msg: <span class="k">string</span>): <span class="k">number</span> {
+  <span class="k">const</span> pos = msg.match(<span class="s">/at position (\d+)/</span>);
+  <span class="a">if</span> (pos) <span class="a">return</span> Math.min(<span class="a">+</span>pos[<span class="a">1</span>], src.length);
+  <span class="k">const</span> lc = msg.match(<span class="s">/line (\d+) column (\d+)/i</span>);
+  <span class="a">if</span> (lc) {
+    <span class="k">const</span> line = <span class="a">+</span>lc[<span class="a">1</span>], col = <span class="a">+</span>lc[<span class="a">2</span>];
+    <span class="k">let</span> offset = <span class="a">0</span>, currentLine = <span class="a">1</span>;
+    <span class="a">for</span> (<span class="k">let</span> i = <span class="a">0</span>; i &lt; src.length; i++) {
+      <span class="a">if</span> (currentLine === line) <span class="a">return</span> Math.min(offset + col - <span class="a">1</span>, src.length);
+      <span class="a">if</span> (src[i] === <span class="s">'\n'</span>) { currentLine++; offset = i + <span class="a">1</span>; }
+    }
+    <span class="a">return</span> src.length;
+  }
+  <span class="a">return</span> tokenizeFallback(src);
+}
+
+<span class="c">// Very small fallback: find the first byte that isn't whitespace or a valid JSON-start char</span>
+<span class="k">function</span> tokenizeFallback(src: <span class="k">string</span>): <span class="k">number</span> {
+  <span class="a">for</span> (<span class="k">let</span> i = <span class="a">0</span>; i &lt; src.length; i++) {
+    <span class="k">const</span> ch = src[i];
+    <span class="a">if</span> (<span class="s">/[\s\{\}\[\]:,"tfn0-9eE+\-.\\]/</span>.test(ch)) <span class="a">continue</span>;
+    <span class="a">return</span> i;
+  }
+  <span class="a">return</span> src.length;
+}
+
+<span class="a">export function</span> normalizeJsonError(src: <span class="k">string</span>, err: Error): JsonError {
+  <span class="k">const</span> message = err.message ?? <span class="s">'Invalid JSON'</span>;
+  <span class="k">const</span> offset = extractOffset(src, message);
+  <span class="k">const</span> { line, column } = offsetToLineCol(src, offset);
+  <span class="k">const</span> hit = HINTS.find((h) =&gt; h.test.test(message));
+  <span class="a">return</span> {
+    line, column,
+    offsetStart: offset,
+    offsetEnd: Math.min(offset + <span class="a">1</span>, src.length),
+    message,
+    hint: hit?.hint,
+  };
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Run tests, fix until green</span>
+<pre>bun run test errors</pre>
+If a hint regex doesn't match in your local engine (V8 vs JSC vs SpiderMonkey), adjust the regex. Vitest uses Node's V8.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 5: Commit</span>
+<pre>git add src/lib/json/errors.ts tests/unit/lib/errors.test.ts
+git commit -m "feat(lib): normalize JSON errors with hint catalog"</pre></div>
+</div>
+
+<!-- T7 -->
+<div class="task">
+<h3>Task 7 · <code class="mono">parse</code> (TDD)</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/lib/json/parse.ts</code>, <code class="mono">tests/unit/lib/parse.test.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Write the failing tests</span>
+<pre><span class="a">import</span> { describe, it, expect } <span class="a">from</span> <span class="s">'vitest'</span>;
+<span class="a">import</span> { parse } <span class="a">from</span> <span class="s">'@/lib/json/parse'</span>;
+
+describe(<span class="s">'parse'</span>, () =&gt; {
+  it(<span class="s">'accepts valid object'</span>, () =&gt; {
+    <span class="k">const</span> r = parse(<span class="s">'{"a":1}'</span>);
+    expect(r.ok).<span class="a">toBe</span>(<span class="b">true</span>);
+    <span class="a">if</span> (r.ok) expect(r.output).<span class="a">toBe</span>(<span class="s">'{"a":1}'</span>);
+  });
+
+  it(<span class="s">'accepts scalar inputs'</span>, () =&gt; {
+    <span class="a">for</span> (<span class="k">const</span> src <span class="a">of</span> [<span class="s">'null'</span>, <span class="s">'true'</span>, <span class="s">'false'</span>, <span class="s">'42'</span>, <span class="s">'"x"'</span>]) {
+      expect(parse(src).ok).<span class="a">toBe</span>(<span class="b">true</span>);
+    }
+  });
+
+  it(<span class="s">'rejects trailing comma'</span>, () =&gt; {
+    <span class="k">const</span> r = parse(<span class="s">'{"a":1,}'</span>);
+    expect(r.ok).<span class="a">toBe</span>(<span class="b">false</span>);
+    <span class="a">if</span> (!r.ok) expect(r.error.hint).<span class="a">toMatch</span>(<span class="s">/trailing comma/i</span>);
+  });
+
+  it(<span class="s">'treats empty / whitespace as not-an-error empty'</span>, () =&gt; {
+    <span class="a">for</span> (<span class="k">const</span> src <span class="a">of</span> [<span class="s">''</span>, <span class="s">'   '</span>, <span class="s">'\n\n'</span>]) {
+      <span class="k">const</span> r = parse(src);
+      expect(r.ok).<span class="a">toBe</span>(<span class="b">false</span>);
+      <span class="a">if</span> (!r.ok) expect(r.error.message).<span class="a">toMatch</span>(<span class="s">/empty/i</span>);
+    }
+  });
+
+  it(<span class="s">'strips BOM before parsing'</span>, () =&gt; {
+    expect(parse(<span class="s">'﻿{"a":1}'</span>).ok).<span class="a">toBe</span>(<span class="b">true</span>);
+  });
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Run, confirm fail</span><pre>bun run test parse</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Implement <code class="mono">src/lib/json/parse.ts</code></span>
+<pre><span class="a">import type</span> { Result } <span class="a">from</span> <span class="s">'./types'</span>;
+<span class="a">import</span> { normalizeJsonError } <span class="a">from</span> <span class="s">'./errors'</span>;
+
+<span class="a">export function</span> parseRaw(src: <span class="k">string</span>): <span class="k">unknown</span> {
+  <span class="k">const</span> stripped = src.charCodeAt(<span class="a">0</span>) === <span class="a">0xFEFF</span> ? src.slice(<span class="a">1</span>) : src;
+  <span class="a">return</span> JSON.parse(stripped);
+}
+
+<span class="c">// Returns a Result whose .output is the input string unchanged (round-tripped through</span>
+<span class="c">// the parser to confirm validity, but the consumer rarely needs the parsed value here).</span>
+<span class="a">export function</span> parse(src: <span class="k">string</span>): Result {
+  <span class="a">if</span> (src.trim() === <span class="s">''</span>) {
+    <span class="a">return</span> { ok: <span class="b">false</span>, stats: <span class="b">null</span>,
+      error: { line: <span class="a">1</span>, column: <span class="a">1</span>, offsetStart: <span class="a">0</span>, offsetEnd: <span class="a">0</span>, message: <span class="s">'empty input'</span> } };
+  }
+  <span class="a">try</span> {
+    parseRaw(src);
+    <span class="a">return</span> { ok: <span class="b">true</span>, output: src, stats: { bytes: <span class="a">new</span> TextEncoder().encode(src).length, keys: <span class="a">0</span>, depth: <span class="a">0</span> } };
+  } <span class="a">catch</span> (e) {
+    <span class="a">return</span> { ok: <span class="b">false</span>, stats: <span class="b">null</span>, error: normalizeJsonError(src, e <span class="a">as</span> Error) };
+  }
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Run tests, ensure green</span><pre>bun run test parse</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 5: Commit</span>
+<pre>git add src/lib/json/parse.ts tests/unit/lib/parse.test.ts
+git commit -m "feat(lib): parse with friendly error envelope"</pre></div>
+</div>
+
+<!-- T8 -->
+<div class="task">
+<h3>Task 8 · <code class="mono">beautify</code> + <code class="mono">sortKeys</code> (TDD)</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/lib/json/beautify.ts</code>, <code class="mono">src/lib/json/sortKeys.ts</code>, <code class="mono">tests/unit/lib/beautify.test.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Write the failing tests</span>
+<pre><span class="a">import</span> { describe, it, expect } <span class="a">from</span> <span class="s">'vitest'</span>;
+<span class="a">import</span> { beautify } <span class="a">from</span> <span class="s">'@/lib/json/beautify'</span>;
+
+describe(<span class="s">'beautify'</span>, () =&gt; {
+  it(<span class="s">'indents with 2 spaces'</span>, () =&gt; {
+    <span class="k">const</span> r = beautify(<span class="s">'{"a":1}'</span>, { indent: <span class="a">2</span>, sortKeys: <span class="b">false</span> });
+    expect(r.ok).<span class="a">toBe</span>(<span class="b">true</span>);
+    <span class="a">if</span> (r.ok) expect(r.output).<span class="a">toBe</span>(<span class="s">'{\n  "a": 1\n}'</span>);
+  });
+
+  it(<span class="s">'indents with 4 spaces'</span>, () =&gt; {
+    <span class="k">const</span> r = beautify(<span class="s">'{"a":1}'</span>, { indent: <span class="a">4</span>, sortKeys: <span class="b">false</span> });
+    <span class="a">if</span> (r.ok) expect(r.output).<span class="a">toContain</span>(<span class="s">'    "a"'</span>);
+  });
+
+  it(<span class="s">'indents with tab'</span>, () =&gt; {
+    <span class="k">const</span> r = beautify(<span class="s">'{"a":1}'</span>, { indent: <span class="s">'\t'</span>, sortKeys: <span class="b">false</span> });
+    <span class="a">if</span> (r.ok) expect(r.output).<span class="a">toContain</span>(<span class="s">'\t"a"'</span>);
+  });
+
+  it(<span class="s">'sortKeys orders object keys alphabetically'</span>, () =&gt; {
+    <span class="k">const</span> r = beautify(<span class="s">'{"b":1,"a":2}'</span>, { indent: <span class="a">2</span>, sortKeys: <span class="b">true</span> });
+    <span class="a">if</span> (r.ok) expect(r.output.indexOf(<span class="s">'"a"'</span>)).<span class="a">toBeLessThan</span>(r.output.indexOf(<span class="s">'"b"'</span>));
+  });
+
+  it(<span class="s">'sortKeys leaves array order alone'</span>, () =&gt; {
+    <span class="k">const</span> r = beautify(<span class="s">'[3,1,2]'</span>, { indent: <span class="a">2</span>, sortKeys: <span class="b">true</span> });
+    <span class="a">if</span> (r.ok) expect(r.output.replace(<span class="s">/\s/g</span>, <span class="s">''</span>)).<span class="a">toBe</span>(<span class="s">'[3,1,2]'</span>);
+  });
+
+  it(<span class="s">'sortKeys recurses into nested objects'</span>, () =&gt; {
+    <span class="k">const</span> r = beautify(<span class="s">'{"x":{"b":1,"a":2}}'</span>, { indent: <span class="a">2</span>, sortKeys: <span class="b">true</span> });
+    <span class="a">if</span> (r.ok) expect(r.output).<span class="a">toMatch</span>(<span class="s">/"a": 2[\s\S]*"b": 1/</span>);
+  });
+
+  it(<span class="s">'returns error for invalid input'</span>, () =&gt; {
+    <span class="k">const</span> r = beautify(<span class="s">'{a:1}'</span>, { indent: <span class="a">2</span>, sortKeys: <span class="b">false</span> });
+    expect(r.ok).<span class="a">toBe</span>(<span class="b">false</span>);
+  });
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Run, confirm fail</span><pre>bun run test beautify</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Implement <code class="mono">src/lib/json/sortKeys.ts</code></span>
+<pre><span class="a">export function</span> sortKeysDeep(value: <span class="k">unknown</span>): <span class="k">unknown</span> {
+  <span class="a">if</span> (Array.isArray(value)) <span class="a">return</span> value.map(sortKeysDeep);
+  <span class="a">if</span> (value &amp;&amp; <span class="a">typeof</span> value === <span class="s">'object'</span>) {
+    <span class="k">const</span> entries = Object.entries(value <span class="a">as</span> Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt;)
+      .sort(([a], [b]) =&gt; (a &lt; b ? -<span class="a">1</span> : a &gt; b ? <span class="a">1</span> : <span class="a">0</span>));
+    <span class="k">const</span> out: Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt; = {};
+    <span class="a">for</span> (<span class="k">const</span> [k, v] <span class="a">of</span> entries) out[k] = sortKeysDeep(v);
+    <span class="a">return</span> out;
+  }
+  <span class="a">return</span> value;
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Implement <code class="mono">src/lib/json/beautify.ts</code></span>
+<pre><span class="a">import type</span> { BeautifyOptions, Result } <span class="a">from</span> <span class="s">'./types'</span>;
+<span class="a">import</span> { parseRaw } <span class="a">from</span> <span class="s">'./parse'</span>;
+<span class="a">import</span> { normalizeJsonError } <span class="a">from</span> <span class="s">'./errors'</span>;
+<span class="a">import</span> { sortKeysDeep } <span class="a">from</span> <span class="s">'./sortKeys'</span>;
+
+<span class="a">export function</span> beautify(src: <span class="k">string</span>, opts: BeautifyOptions): Result {
+  <span class="a">if</span> (src.trim() === <span class="s">''</span>) {
+    <span class="a">return</span> { ok: <span class="b">false</span>, stats: <span class="b">null</span>,
+      error: { line: <span class="a">1</span>, column: <span class="a">1</span>, offsetStart: <span class="a">0</span>, offsetEnd: <span class="a">0</span>, message: <span class="s">'empty input'</span> } };
+  }
+  <span class="a">try</span> {
+    <span class="k">const</span> raw = parseRaw(src);
+    <span class="k">const</span> value = opts.sortKeys ? sortKeysDeep(raw) : raw;
+    <span class="k">const</span> output = JSON.stringify(value, <span class="b">null</span>, opts.indent);
+    <span class="a">return</span> { ok: <span class="b">true</span>, output, stats: { bytes: <span class="a">new</span> TextEncoder().encode(output).length, keys: <span class="a">0</span>, depth: <span class="a">0</span> } };
+  } <span class="a">catch</span> (e) {
+    <span class="a">return</span> { ok: <span class="b">false</span>, stats: <span class="b">null</span>, error: normalizeJsonError(src, e <span class="a">as</span> Error) };
+  }
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 5: Run, confirm green</span><pre>bun run test beautify</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 6: Commit</span>
+<pre>git add src/lib/json/beautify.ts src/lib/json/sortKeys.ts tests/unit/lib/beautify.test.ts
+git commit -m "feat(lib): beautify with indent + deep sortKeys"</pre></div>
+</div>
+
+<!-- T9 -->
+<div class="task">
+<h3>Task 9 · <code class="mono">minify</code> (TDD)</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/lib/json/minify.ts</code>, <code class="mono">tests/unit/lib/minify.test.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Write the failing tests</span>
+<pre><span class="a">import</span> { describe, it, expect } <span class="a">from</span> <span class="s">'vitest'</span>;
+<span class="a">import</span> { minify } <span class="a">from</span> <span class="s">'@/lib/json/minify'</span>;
+
+describe(<span class="s">'minify'</span>, () =&gt; {
+  it(<span class="s">'strips whitespace'</span>, () =&gt; {
+    <span class="k">const</span> r = minify(<span class="s">'{\n  "a": 1,\n  "b": [1, 2]\n}'</span>);
+    <span class="a">if</span> (r.ok) expect(r.output).<span class="a">toBe</span>(<span class="s">'{"a":1,"b":[1,2]}'</span>);
+  });
+  it(<span class="s">'preserves escapes'</span>, () =&gt; {
+    <span class="k">const</span> r = minify(<span class="s">'{"s": "a\\nb"}'</span>);
+    <span class="a">if</span> (r.ok) expect(r.output).<span class="a">toBe</span>(<span class="s">'{"s":"a\\nb"}'</span>);
+  });
+  it(<span class="s">'round-trips minified output'</span>, () =&gt; {
+    <span class="k">const</span> r1 = minify(<span class="s">'{"a":1}'</span>);
+    <span class="a">if</span> (r1.ok) expect(JSON.parse(r1.output)).<span class="a">toEqual</span>({ a: <span class="a">1</span> });
+  });
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Implement</span>
+<pre><span class="a">import type</span> { Result } <span class="a">from</span> <span class="s">'./types'</span>;
+<span class="a">import</span> { parseRaw } <span class="a">from</span> <span class="s">'./parse'</span>;
+<span class="a">import</span> { normalizeJsonError } <span class="a">from</span> <span class="s">'./errors'</span>;
+
+<span class="a">export function</span> minify(src: <span class="k">string</span>): Result {
+  <span class="a">if</span> (src.trim() === <span class="s">''</span>) {
+    <span class="a">return</span> { ok: <span class="b">false</span>, stats: <span class="b">null</span>,
+      error: { line: <span class="a">1</span>, column: <span class="a">1</span>, offsetStart: <span class="a">0</span>, offsetEnd: <span class="a">0</span>, message: <span class="s">'empty input'</span> } };
+  }
+  <span class="a">try</span> {
+    <span class="k">const</span> output = JSON.stringify(parseRaw(src));
+    <span class="a">return</span> { ok: <span class="b">true</span>, output, stats: { bytes: output.length, keys: <span class="a">0</span>, depth: <span class="a">0</span> } };
+  } <span class="a">catch</span> (e) {
+    <span class="a">return</span> { ok: <span class="b">false</span>, stats: <span class="b">null</span>, error: normalizeJsonError(src, e <span class="a">as</span> Error) };
+  }
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Run, commit</span>
+<pre>bun run test minify
+git add src/lib/json/minify.ts tests/unit/lib/minify.test.ts
+git commit -m "feat(lib): minify"</pre></div>
+</div>
+
+<!-- T10 -->
+<div class="task">
+<h3>Task 10 · <code class="mono">validate</code> with stats walker (TDD)</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/lib/json/validate.ts</code>, <code class="mono">tests/unit/lib/validate.test.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Failing tests</span>
+<pre><span class="a">import</span> { describe, it, expect } <span class="a">from</span> <span class="s">'vitest'</span>;
+<span class="a">import</span> { validate } <span class="a">from</span> <span class="s">'@/lib/json/validate'</span>;
+
+describe(<span class="s">'validate'</span>, () =&gt; {
+  it(<span class="s">'reports stats for nested objects'</span>, () =&gt; {
+    <span class="k">const</span> r = validate(<span class="s">'{"a":{"b":{"c":1}},"d":[1,2,3]}'</span>);
+    expect(r.ok).<span class="a">toBe</span>(<span class="b">true</span>);
+    <span class="a">if</span> (r.ok) {
+      expect(r.stats.keys).<span class="a">toBe</span>(<span class="a">4</span>);    <span class="c">// a, b, c, d</span>
+      expect(r.stats.depth).<span class="a">toBe</span>(<span class="a">3</span>);   <span class="c">// {a:{b:{c:.}}}</span>
+      expect(r.stats.bytes).<span class="a">toBeGreaterThan</span>(<span class="a">0</span>);
+    }
+  });
+
+  it(<span class="s">'scalar JSON has zero keys and zero depth'</span>, () =&gt; {
+    <span class="k">const</span> r = validate(<span class="s">'42'</span>);
+    <span class="a">if</span> (r.ok) {
+      expect(r.stats.keys).<span class="a">toBe</span>(<span class="a">0</span>);
+      expect(r.stats.depth).<span class="a">toBe</span>(<span class="a">0</span>);
+    }
+  });
+
+  it(<span class="s">'reports a notice exactly once on duplicate keys (via raw text scan)'</span>, () =&gt; {
+    <span class="k">const</span> r = validate(<span class="s">'{"a":1,"a":2}'</span>);
+    expect(r.ok).<span class="a">toBe</span>(<span class="b">true</span>);
+    <span class="a">if</span> (r.ok) expect(r.notices?.[<span class="a">0</span>]).<span class="a">toMatch</span>(<span class="s">/duplicate key/i</span>);
+  });
+
+  it(<span class="s">'fails on bad JSON'</span>, () =&gt; {
+    expect(validate(<span class="s">'{nope}'</span>).ok).<span class="a">toBe</span>(<span class="b">false</span>);
+  });
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Implement</span>
+<pre><span class="a">import type</span> { Result, Stats } <span class="a">from</span> <span class="s">'./types'</span>;
+<span class="a">import</span> { parseRaw } <span class="a">from</span> <span class="s">'./parse'</span>;
+<span class="a">import</span> { normalizeJsonError } <span class="a">from</span> <span class="s">'./errors'</span>;
+
+<span class="k">function</span> walk(v: <span class="k">unknown</span>): { keys: <span class="k">number</span>; depth: <span class="k">number</span> } {
+  <span class="a">if</span> (Array.isArray(v)) {
+    <span class="k">let</span> keys = <span class="a">0</span>, depth = <span class="a">1</span>;
+    <span class="a">for</span> (<span class="k">const</span> item <span class="a">of</span> v) {
+      <span class="k">const</span> w = walk(item);
+      keys += w.keys;
+      depth = Math.max(depth, w.depth + <span class="a">1</span>);
+    }
+    <span class="a">return</span> { keys, depth: v.length === <span class="a">0</span> ? <span class="a">1</span> : depth };
+  }
+  <span class="a">if</span> (v &amp;&amp; <span class="a">typeof</span> v === <span class="s">'object'</span>) {
+    <span class="k">const</span> entries = Object.entries(v <span class="a">as</span> Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt;);
+    <span class="k">let</span> keys = entries.length, depth = <span class="a">1</span>;
+    <span class="a">for</span> (<span class="k">const</span> [, val] <span class="a">of</span> entries) {
+      <span class="k">const</span> w = walk(val);
+      keys += w.keys;
+      depth = Math.max(depth, w.depth + <span class="a">1</span>);
+    }
+    <span class="a">return</span> { keys, depth: entries.length === <span class="a">0</span> ? <span class="a">1</span> : depth };
+  }
+  <span class="a">return</span> { keys: <span class="a">0</span>, depth: <span class="a">0</span> };
+}
+
+<span class="c">// Heuristic duplicate-key scan: counts &lt;"key"&gt;: occurrences across the raw text per</span>
+<span class="c">// containing object. Simple, fast, no second parser pass.</span>
+<span class="k">function</span> firstDuplicateKey(src: <span class="k">string</span>): <span class="k">string</span> | <span class="b">null</span> {
+  <span class="k">const</span> stack: Map&lt;<span class="k">string</span>, <span class="k">number</span>&gt;[] = [];
+  <span class="k">let</span> i = <span class="a">0</span>;
+  <span class="a">while</span> (i &lt; src.length) {
+    <span class="k">const</span> ch = src[i];
+    <span class="a">if</span> (ch === <span class="s">'{'</span>) { stack.push(<span class="a">new</span> Map()); i++; <span class="a">continue</span>; }
+    <span class="a">if</span> (ch === <span class="s">'}'</span>) { stack.pop(); i++; <span class="a">continue</span>; }
+    <span class="a">if</span> (ch === <span class="s">'"'</span> &amp;&amp; stack.length &gt; <span class="a">0</span>) {
+      <span class="k">let</span> j = i + <span class="a">1</span>;
+      <span class="a">while</span> (j &lt; src.length &amp;&amp; src[j] !== <span class="s">'"'</span>) j += src[j] === <span class="s">'\\'</span> ? <span class="a">2</span> : <span class="a">1</span>;
+      <span class="k">const</span> key = src.slice(i + <span class="a">1</span>, j);
+      <span class="k">let</span> k = j + <span class="a">1</span>;
+      <span class="a">while</span> (k &lt; src.length &amp;&amp; <span class="s">/\s/</span>.test(src[k])) k++;
+      <span class="a">if</span> (src[k] === <span class="s">':'</span>) {
+        <span class="k">const</span> top = stack[stack.length - <span class="a">1</span>];
+        <span class="a">if</span> (top.has(key)) <span class="a">return</span> key;
+        top.set(key, (top.get(key) ?? <span class="a">0</span>) + <span class="a">1</span>);
+      }
+      i = j + <span class="a">1</span>;
+      <span class="a">continue</span>;
+    }
+    i++;
+  }
+  <span class="a">return</span> <span class="b">null</span>;
+}
+
+<span class="a">export function</span> validate(src: <span class="k">string</span>): Result {
+  <span class="a">if</span> (src.trim() === <span class="s">''</span>) {
+    <span class="a">return</span> { ok: <span class="b">false</span>, stats: <span class="b">null</span>,
+      error: { line: <span class="a">1</span>, column: <span class="a">1</span>, offsetStart: <span class="a">0</span>, offsetEnd: <span class="a">0</span>, message: <span class="s">'empty input'</span> } };
+  }
+  <span class="a">try</span> {
+    <span class="k">const</span> raw = parseRaw(src);
+    <span class="k">const</span> w = walk(raw);
+    <span class="k">const</span> stats: Stats = { keys: w.keys, depth: w.depth, bytes: <span class="a">new</span> TextEncoder().encode(src).length };
+    <span class="k">const</span> dup = firstDuplicateKey(src);
+    <span class="k">const</span> notices = dup ? [<span class="s">`Duplicate key '${dup}' — kept last value`</span>] : <span class="k">undefined</span>;
+    <span class="a">return</span> { ok: <span class="b">true</span>, output: <span class="s">''</span>, stats, notices };
+  } <span class="a">catch</span> (e) {
+    <span class="a">return</span> { ok: <span class="b">false</span>, stats: <span class="b">null</span>, error: normalizeJsonError(src, e <span class="a">as</span> Error) };
+  }
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Run, commit</span>
+<pre>bun run test validate
+git add src/lib/json/validate.ts tests/unit/lib/validate.test.ts
+git commit -m "feat(lib): validate with stats walker + duplicate-key notice"</pre></div>
+</div>
+
+<!-- T11 -->
+<div class="task">
+<h3>Task 11 · <code class="mono">buildTree</code> for /parse (TDD)</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/lib/json/tree.ts</code>, <code class="mono">tests/unit/lib/tree.test.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Failing tests</span>
+<pre><span class="a">import</span> { describe, it, expect } <span class="a">from</span> <span class="s">'vitest'</span>;
+<span class="a">import</span> { buildTree } <span class="a">from</span> <span class="s">'@/lib/json/tree'</span>;
+
+describe(<span class="s">'buildTree'</span>, () =&gt; {
+  it(<span class="s">'produces dotted paths for object members'</span>, () =&gt; {
+    <span class="k">const</span> r = buildTree(<span class="s">'{"a":{"b":1}}'</span>);
+    expect(r.ok).<span class="a">toBe</span>(<span class="b">true</span>);
+    <span class="a">if</span> (!r.ok) <span class="a">return</span>;
+    <span class="k">const</span> root = r.tree;
+    expect(root.kind).<span class="a">toBe</span>(<span class="s">'object'</span>);
+    <span class="a">if</span> (root.kind !== <span class="s">'object'</span>) <span class="a">return</span>;
+    expect(root.children[<span class="a">0</span>].path).<span class="a">toBe</span>(<span class="s">'a'</span>);
+    expect((root.children[<span class="a">0</span>] <span class="a">as any</span>).children[<span class="a">0</span>].path).<span class="a">toBe</span>(<span class="s">'a.b'</span>);
+  });
+
+  it(<span class="s">'uses bracketed indices for arrays'</span>, () =&gt; {
+    <span class="k">const</span> r = buildTree(<span class="s">'{"users":[{"email":"x"}]}'</span>);
+    <span class="a">if</span> (!r.ok) <span class="a">return</span>;
+    <span class="k">const</span> users = (r.tree <span class="a">as any</span>).children[<span class="a">0</span>];
+    expect(users.path).<span class="a">toBe</span>(<span class="s">'users'</span>);
+    expect(users.children[<span class="a">0</span>].path).<span class="a">toBe</span>(<span class="s">'users[0]'</span>);
+    expect(users.children[<span class="a">0</span>].children[<span class="a">0</span>].path).<span class="a">toBe</span>(<span class="s">'users[0].email'</span>);
+  });
+
+  it(<span class="s">'tags primitive types'</span>, () =&gt; {
+    <span class="k">const</span> r = buildTree(<span class="s">'[1,"x",true,null]'</span>);
+    <span class="a">if</span> (!r.ok) <span class="a">return</span>;
+    <span class="k">const</span> kinds = (r.tree <span class="a">as any</span>).children.map((c: <span class="a">any</span>) =&gt; c.kind);
+    expect(kinds).<span class="a">toEqual</span>([<span class="s">'number'</span>, <span class="s">'string'</span>, <span class="s">'boolean'</span>, <span class="s">'null'</span>]);
+  });
+
+  it(<span class="s">'returns ok:false for invalid JSON'</span>, () =&gt; {
+    expect(buildTree(<span class="s">'{nope}'</span>).ok).<span class="a">toBe</span>(<span class="b">false</span>);
+  });
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Implement</span>
+<pre><span class="a">import type</span> { JsonError, TreeNode } <span class="a">from</span> <span class="s">'./types'</span>;
+<span class="a">import</span> { parseRaw } <span class="a">from</span> <span class="s">'./parse'</span>;
+<span class="a">import</span> { normalizeJsonError } <span class="a">from</span> <span class="s">'./errors'</span>;
+
+<span class="k">function</span> joinPath(parent: <span class="k">string</span>, key: <span class="k">string</span> | <span class="k">number</span>): <span class="k">string</span> {
+  <span class="a">if</span> (<span class="a">typeof</span> key === <span class="s">'number'</span>) <span class="a">return</span> <span class="s">`${parent}[${key}]`</span>;
+  <span class="a">return</span> parent ? <span class="s">`${parent}.${key}`</span> : key;
+}
+
+<span class="k">function</span> build(v: <span class="k">unknown</span>, key: <span class="k">string</span> | <span class="k">number</span> | <span class="b">null</span>, path: <span class="k">string</span>): TreeNode {
+  <span class="a">if</span> (Array.isArray(v)) <span class="a">return</span> {
+    kind: <span class="s">'array'</span>, key, path,
+    children: v.map((item, i) =&gt; build(item, i, joinPath(path, i))),
+  };
+  <span class="a">if</span> (v &amp;&amp; <span class="a">typeof</span> v === <span class="s">'object'</span>) {
+    <span class="k">const</span> entries = Object.entries(v <span class="a">as</span> Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt;);
+    <span class="a">return</span> {
+      kind: <span class="s">'object'</span>, key, path,
+      children: entries.map(([k, val]) =&gt; build(val, k, joinPath(path, k))),
+    };
+  }
+  <span class="k">const</span> kind: TreeNode[<span class="s">'kind'</span>] =
+    v === <span class="b">null</span> ? <span class="s">'null'</span> :
+    <span class="a">typeof</span> v === <span class="s">'string'</span>  ? <span class="s">'string'</span>  :
+    <span class="a">typeof</span> v === <span class="s">'number'</span>  ? <span class="s">'number'</span>  :
+    <span class="a">typeof</span> v === <span class="s">'boolean'</span> ? <span class="s">'boolean'</span> : <span class="s">'string'</span>;
+  <span class="a">return</span> { kind, key, path, value: v };
+}
+
+<span class="a">export function</span> buildTree(src: <span class="k">string</span>): { ok: <span class="b">true</span>; tree: TreeNode } | { ok: <span class="b">false</span>; error: JsonError } {
+  <span class="a">try</span> { <span class="a">return</span> { ok: <span class="b">true</span>, tree: build(parseRaw(src), <span class="b">null</span>, <span class="s">''</span>) }; }
+  <span class="a">catch</span> (e) { <span class="a">return</span> { ok: <span class="b">false</span>, error: normalizeJsonError(src, e <span class="a">as</span> Error) }; }
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Run, commit</span>
+<pre>bun run test tree
+git add src/lib/json/tree.ts tests/unit/lib/tree.test.ts
+git commit -m "feat(lib): buildTree for /parse with JSON paths"</pre></div>
+</div>
+
+<!-- T12 -->
+<div class="task">
+<h3>Task 12 · localStorage with schemaVersion (TDD)</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/lib/storage.ts</code>, <code class="mono">tests/unit/lib/storage.test.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Failing tests</span>
+<pre><span class="a">import</span> { describe, it, expect, beforeEach } <span class="a">from</span> <span class="s">'vitest'</span>;
+<span class="a">import</span> { loadState, saveState, clearState, type Persisted } <span class="a">from</span> <span class="s">'@/lib/storage'</span>;
+
+beforeEach(() =&gt; localStorage.clear());
+
+describe(<span class="s">'storage'</span>, () =&gt; {
+  it(<span class="s">'round-trips canonical shape'</span>, () =&gt; {
+    <span class="k">const</span> state: Persisted = {
+      schemaVersion: <span class="a">1</span>, input: <span class="s">'{"a":1}'</span>, tool: <span class="s">'beautify'</span>,
+      options: { indent: <span class="a">2</span>, sortKeys: <span class="b">false</span> }, theme: <span class="s">'auto'</span>,
+    };
+    saveState(state);
+    expect(loadState()).<span class="a">toEqual</span>(state);
+  });
+
+  it(<span class="s">'discards a schemaVersion mismatch'</span>, () =&gt; {
+    localStorage.setItem(<span class="s">'jsontools:v1'</span>, JSON.stringify({ schemaVersion: <span class="a">99</span> }));
+    expect(loadState()).<span class="a">toBeNull</span>();
+  });
+
+  it(<span class="s">'discards malformed JSON'</span>, () =&gt; {
+    localStorage.setItem(<span class="s">'jsontools:v1'</span>, <span class="s">'not json'</span>);
+    expect(loadState()).<span class="a">toBeNull</span>();
+  });
+
+  it(<span class="s">'clearState removes the entry'</span>, () =&gt; {
+    saveState({ schemaVersion: <span class="a">1</span>, input: <span class="s">''</span>, tool: <span class="s">'beautify'</span>,
+      options: { indent: <span class="a">2</span>, sortKeys: <span class="b">false</span> }, theme: <span class="s">'auto'</span> });
+    clearState();
+    expect(loadState()).<span class="a">toBeNull</span>();
+  });
+
+  it(<span class="s">'saveState swallows quota errors'</span>, () =&gt; {
+    <span class="k">const</span> orig = Storage.prototype.setItem;
+    Storage.prototype.setItem = () =&gt; { <span class="a">throw new Error</span>(<span class="s">'QuotaExceededError'</span>); };
+    expect(() =&gt; saveState({ schemaVersion: <span class="a">1</span>, input: <span class="s">''</span>, tool: <span class="s">'beautify'</span>,
+      options: { indent: <span class="a">2</span>, sortKeys: <span class="b">false</span> }, theme: <span class="s">'auto'</span> })).<span class="a">not</span>.<span class="a">toThrow</span>();
+    Storage.prototype.setItem = orig;
+  });
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Implement</span>
+<pre><span class="a">import type</span> { BeautifyOptions, Tool } <span class="a">from</span> <span class="s">'./json/types'</span>;
+
+<span class="a">export type</span> Persisted = {
+  schemaVersion: <span class="a">1</span>;
+  input: <span class="k">string</span>;
+  tool: Tool;
+  options: BeautifyOptions;
+  theme: <span class="s">'auto'</span> | <span class="s">'light'</span> | <span class="s">'dark'</span>;
+};
+
+<span class="k">const</span> KEY = <span class="s">'jsontools:v1'</span>;
+<span class="k">const</span> CURRENT_VERSION = <span class="a">1</span>;
+
+<span class="k">function</span> isPersisted(v: <span class="k">unknown</span>): v <span class="a">is</span> Persisted {
+  <span class="a">if</span> (!v || <span class="a">typeof</span> v !== <span class="s">'object'</span>) <span class="a">return false</span>;
+  <span class="k">const</span> o = v <span class="a">as</span> Record&lt;<span class="k">string</span>, <span class="k">unknown</span>&gt;;
+  <span class="a">return</span> o.schemaVersion === CURRENT_VERSION
+    &amp;&amp; <span class="a">typeof</span> o.input === <span class="s">'string'</span>
+    &amp;&amp; (o.tool === <span class="s">'beautify'</span> || o.tool === <span class="s">'minify'</span> || o.tool === <span class="s">'validate'</span> || o.tool === <span class="s">'parse'</span>)
+    &amp;&amp; (o.theme === <span class="s">'auto'</span> || o.theme === <span class="s">'light'</span> || o.theme === <span class="s">'dark'</span>)
+    &amp;&amp; !!o.options &amp;&amp; <span class="a">typeof</span> o.options === <span class="s">'object'</span>;
+}
+
+<span class="a">export function</span> loadState(): Persisted | <span class="b">null</span> {
+  <span class="a">try</span> {
+    <span class="k">const</span> raw = localStorage.getItem(KEY);
+    <span class="a">if</span> (!raw) <span class="a">return null</span>;
+    <span class="k">const</span> parsed = JSON.parse(raw);
+    <span class="a">return</span> isPersisted(parsed) ? parsed : <span class="b">null</span>;
+  } <span class="a">catch</span> { <span class="a">return null</span>; }
+}
+
+<span class="a">export function</span> saveState(state: Persisted): <span class="k">void</span> {
+  <span class="a">try</span> { localStorage.setItem(KEY, JSON.stringify(state)); } <span class="a">catch</span> { <span class="c">/* quota — silent */</span> }
+}
+
+<span class="a">export function</span> clearState(): <span class="k">void</span> {
+  <span class="a">try</span> { localStorage.removeItem(KEY); } <span class="a">catch</span> { <span class="c">/* ignore */</span> }
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Run, commit</span>
+<pre>bun run test storage
+git add src/lib/storage.ts tests/unit/lib/storage.test.ts
+git commit -m "feat(lib): localStorage with schemaVersion guard"</pre></div>
+</div>
+</section>
+
+<!-- =========================== PHASE 2 =========================== -->
+<section id="p2" class="phase">
+<h2>Phase 2 · Styling &amp; layout</h2>
+
+<!-- T13 -->
+<div class="task">
+<h3>Task 13 · Theme tokens, fonts, global styles</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/styles/global.css</code> · <strong>Create:</strong> <code class="mono">public/fonts/.gitkeep</code> (optional self-host)</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Rewrite <code class="mono">src/styles/global.css</code> with token system</span>
+<pre><span class="a">@import</span> <span class="s">"tailwindcss"</span>;
+
+<span class="c">/* CSS variables — single source of truth, toggled by [data-theme] */</span>
+<span class="k">:root</span>, [data-theme="light"] {
+  --paper: #fbf8f1;
+  --editor: #fffefb;
+  --ink: #1f1a14;
+  --muted: #8a8275;
+  --border: #e9e2d2;
+  --amber: #b8801a;
+  --amber-soft: #f5b647;
+  --key: #3f7e5d;
+  --str: #8a5b12;
+  --bool: #6b3d8a;
+  --error: #b04141;
+}
+[data-theme="dark"] {
+  --paper: #0d0f12;
+  --editor: #15181c;
+  --ink: #d8d8c2;
+  --muted: #6c7480;
+  --border: #1f242a;
+  --amber: #f5b647;
+  --amber-soft: #f5b647;
+  --key: #7fc8a9;
+  --str: #e5b870;
+  --bool: #c594e3;
+  --error: #ff6b6b;
+}
+
+<span class="c">/* Auto follows system unless [data-theme] is set */</span>
+<span class="a">@media</span> (prefers-color-scheme: dark) {
+  <span class="k">:root</span>:not([data-theme]) {
+    --paper: #0d0f12; --editor: #15181c; --ink: #d8d8c2; --muted: #6c7480;
+    --border: #1f242a; --amber: #f5b647; --amber-soft: #f5b647;
+    --key: #7fc8a9; --str: #e5b870; --bool: #c594e3; --error: #ff6b6b;
+  }
+}
+
+<span class="a">@theme</span> {
+  --color-paper:  var(--paper);
+  --color-editor: var(--editor);
+  --color-ink:    var(--ink);
+  --color-muted:  var(--muted);
+  --color-amber:  var(--amber);
+  --color-border-paper: var(--border);
+  --font-mono: <span class="s">'JetBrains Mono'</span>, ui-monospace, monospace;
+}
+
+html, body { background: var(--paper); color: var(--ink); font-family: var(--font-mono); }
+* { border-color: var(--border); }
+::selection { background: color-mix(in srgb, var(--amber) 30%, transparent); }
+
+.blink { animation: blink 1s steps(2) infinite; }
+<span class="a">@keyframes</span> blink { 50% { opacity: 0; } }
+<span class="a">@media</span> (prefers-reduced-motion: reduce) { .blink { animation: none; } }</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Pull JetBrains Mono via &lt;link&gt; in BaseLayout (next task uses Google Fonts; self-hosting is a v2 optimization)</span></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Commit</span>
+<pre>git add src/styles/global.css
+git commit -m "style: theme tokens for light + dark with honey amber"</pre></div>
+</div>
+
+<!-- T14 -->
+<div class="task">
+<h3>Task 14 · BaseLayout: theme bootstrap, font link, CF Web Analytics</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/layouts/BaseLayout.astro</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Replace BaseLayout contents</span>
+<pre><span class="c">---</span>
+<span class="a">import</span> <span class="s">'../styles/global.css'</span>;
+<span class="k">type</span> Props = { title?: <span class="k">string</span>; description?: <span class="k">string</span>; canonical?: <span class="k">string</span> };
+<span class="k">const</span> {
+  title = <span class="s">'jsontools — beautify, minify, validate, parse JSON'</span>,
+  description = <span class="s">'A fast, beautiful, client-only JSON workspace. No tracking, no accounts.'</span>,
+  canonical,
+} = Astro.props <span class="a">as</span> Props;
+<span class="k">const</span> url = canonical ?? <span class="a">new</span> URL(Astro.url.pathname, <span class="s">'https://jsontools.erikdao.com'</span>).href;
+<span class="c">---</span>
+&lt;!doctype html&gt;
+&lt;html lang=<span class="s">"en"</span>&gt;
+  &lt;head&gt;
+    &lt;meta charset=<span class="s">"UTF-8"</span> /&gt;
+    &lt;meta name=<span class="s">"viewport"</span> content=<span class="s">"width=device-width, initial-scale=1"</span> /&gt;
+    &lt;title&gt;{title}&lt;/title&gt;
+    &lt;meta name=<span class="s">"description"</span> content={description} /&gt;
+    &lt;link rel=<span class="s">"canonical"</span> href={url} /&gt;
+    &lt;meta property=<span class="s">"og:title"</span> content={title} /&gt;
+    &lt;meta property=<span class="s">"og:description"</span> content={description} /&gt;
+    &lt;meta property=<span class="s">"og:type"</span> content=<span class="s">"website"</span> /&gt;
+    &lt;meta property=<span class="s">"og:url"</span> content={url} /&gt;
+    &lt;link rel=<span class="s">"icon"</span> type=<span class="s">"image/svg+xml"</span> href=<span class="s">"/favicon.svg"</span> /&gt;
+    &lt;link rel=<span class="s">"preconnect"</span> href=<span class="s">"https://fonts.gstatic.com"</span> crossorigin /&gt;
+    &lt;link href=<span class="s">"https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;display=swap"</span> rel=<span class="s">"stylesheet"</span> /&gt;
+    {<span class="c">/* Theme bootstrap: read localStorage and set data-theme before paint to avoid flash */</span>}
+    &lt;script is:inline&gt;
+      (() =&gt; {
+        <span class="k">try</span> {
+          <span class="k">const</span> raw = localStorage.getItem(<span class="s">'jsontools:v1'</span>);
+          <span class="k">const</span> theme = raw ? (JSON.parse(raw).theme ?? <span class="s">'auto'</span>) : <span class="s">'auto'</span>;
+          <span class="a">if</span> (theme !== <span class="s">'auto'</span>) document.documentElement.setAttribute(<span class="s">'data-theme'</span>, theme);
+        } <span class="a">catch</span> { <span class="c">/* ignore */</span> }
+      })();
+    &lt;/script&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;slot /&gt;
+    &lt;!-- Cloudflare Web Analytics --&gt;
+    &lt;script defer src=<span class="s">"https://static.cloudflareinsights.com/beacon.min.js"</span> data-cf-beacon='{"token": "REPLACE_AFTER_DEPLOY"}'&gt;&lt;/script&gt;
+  &lt;/body&gt;
+&lt;/html&gt;</pre>
+The CF Analytics token is filled in <strong>after</strong> first deploy (Task 38).</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Verify dev still renders</span><pre>bun run dev</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Commit</span>
+<pre>git add src/layouts/BaseLayout.astro
+git commit -m "feat(layout): theme bootstrap + SEO meta + CF Analytics placeholder"</pre></div>
+</div>
+</section>
+
+<!-- =========================== PHASE 3 =========================== -->
+<section id="p3" class="phase">
+<h2>Phase 3 · Static chrome &amp; routing</h2>
+
+<!-- T15 -->
+<div class="task">
+<h3>Task 15 · <code class="mono">Header.astro</code> with theme toggle + source link</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/components/Header.astro</code>, <code class="mono">src/components/ThemeToggle.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Create <code class="mono">ThemeToggle.tsx</code> (Preact island)</span>
+<pre><span class="c">// src/components/ThemeToggle.tsx</span>
+<span class="a">import</span> { useEffect, useState } <span class="a">from</span> <span class="s">'preact/hooks'</span>;
+<span class="a">import</span> { loadState, saveState } <span class="a">from</span> <span class="s">'@/lib/storage'</span>;
+
+<span class="k">type</span> Theme = <span class="s">'auto'</span> | <span class="s">'light'</span> | <span class="s">'dark'</span>;
+<span class="k">const</span> NEXT: Record&lt;Theme, Theme&gt; = { auto: <span class="s">'light'</span>, light: <span class="s">'dark'</span>, dark: <span class="s">'auto'</span> };
+
+<span class="a">export default function</span> ThemeToggle() {
+  <span class="k">const</span> [theme, setTheme] = useState&lt;Theme&gt;(<span class="s">'auto'</span>);
+  useEffect(() =&gt; { <span class="k">const</span> s = loadState(); <span class="a">if</span> (s) setTheme(s.theme); }, []);
+
+  <span class="k">const</span> cycle = () =&gt; {
+    <span class="k">const</span> next = NEXT[theme];
+    setTheme(next);
+    <span class="a">if</span> (next === <span class="s">'auto'</span>) document.documentElement.removeAttribute(<span class="s">'data-theme'</span>);
+    <span class="a">else</span> document.documentElement.setAttribute(<span class="s">'data-theme'</span>, next);
+    <span class="k">const</span> existing = loadState();
+    saveState({
+      schemaVersion: <span class="a">1</span>,
+      input: existing?.input ?? <span class="s">''</span>,
+      tool: existing?.tool ?? <span class="s">'beautify'</span>,
+      options: existing?.options ?? { indent: <span class="a">2</span>, sortKeys: <span class="b">false</span> },
+      theme: next,
+    });
+  };
+
+  <span class="a">return</span> (
+    &lt;button onClick={cycle} class=<span class="s">"text-xs text-[var(--muted)] hover:text-[var(--amber)]"</span>
+      aria-label={<span class="s">`Theme: ${theme}. Click to cycle.`</span>}&gt;↕ {theme}&lt;/button&gt;
+  );
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Create <code class="mono">Header.astro</code></span>
+<pre><span class="c">---</span>
+<span class="a">import</span> ThemeToggle <span class="a">from</span> <span class="s">'./ThemeToggle'</span>;
+<span class="c">---</span>
+&lt;header class=<span class="s">"flex items-center justify-between px-4 py-3 border-b"</span> style=<span class="s">"border-color: var(--border)"</span>&gt;
+  &lt;a href=<span class="s">"/beautify"</span> class=<span class="s">"font-semibold tracking-tight text-[var(--ink)]"</span>&gt;
+    jsontools&lt;span class=<span class="s">"text-[var(--amber)] blink"</span>&gt;_&lt;/span&gt;
+  &lt;/a&gt;
+  &lt;div class=<span class="s">"flex items-center gap-4"</span>&gt;
+    &lt;ThemeToggle client:load /&gt;
+    &lt;a href=<span class="s">"https://github.com/erikdao/json-tools"</span> rel=<span class="s">"noopener"</span>
+       class=<span class="s">"text-xs text-[var(--muted)] hover:text-[var(--amber)]"</span>&gt;Source ↗&lt;/a&gt;
+  &lt;/div&gt;
+&lt;/header&gt;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Commit</span>
+<pre>git add src/components/Header.astro src/components/ThemeToggle.tsx
+git commit -m "feat(ui): header with theme toggle and source link"</pre></div>
+</div>
+
+<!-- T16 -->
+<div class="task">
+<h3>Task 16 · <code class="mono">Footer.astro</code></h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/components/Footer.astro</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Create Footer</span>
+<pre>&lt;footer class=<span class="s">"text-xs text-[var(--muted)] px-4 py-3 border-t flex justify-between"</span>
+        style=<span class="s">"border-color: var(--border)"</span>&gt;
+  &lt;span&gt;built by erik · no tracking · v0.1&lt;/span&gt;
+  &lt;a href=<span class="s">"https://github.com/erikdao/json-tools"</span> class=<span class="s">"hover:text-[var(--amber)]"</span>&gt;source ↗&lt;/a&gt;
+&lt;/footer&gt;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Commit</span>
+<pre>git add src/components/Footer.astro
+git commit -m "feat(ui): footer"</pre></div>
+</div>
+
+<!-- T17 -->
+<div class="task">
+<h3>Task 17 · <code class="mono">TabStrip.astro</code></h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/components/TabStrip.astro</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Create TabStrip</span>
+<pre><span class="c">---</span>
+<span class="k">type</span> Props = { active: <span class="s">'beautify'</span> | <span class="s">'minify'</span> | <span class="s">'validate'</span> | <span class="s">'parse'</span> };
+<span class="k">const</span> { active } = Astro.props <span class="a">as</span> Props;
+<span class="k">const</span> tabs = [<span class="s">'beautify'</span>, <span class="s">'minify'</span>, <span class="s">'validate'</span>, <span class="s">'parse'</span>] <span class="a">as const</span>;
+<span class="c">---</span>
+&lt;nav class=<span class="s">"flex gap-0 px-3 border-b"</span> style=<span class="s">"border-color: var(--border)"</span> aria-label=<span class="s">"Tools"</span>&gt;
+  {tabs.map((t) =&gt; (
+    &lt;a
+      href={<span class="s">`/${t}`</span>}
+      class={<span class="s">`px-3 py-2 text-sm -mb-px border-b ${active === t
+        ? <span class="s">'text-[var(--amber)] border-[var(--amber)]'</span>
+        : <span class="s">'text-[var(--muted)] border-transparent hover:text-[var(--ink)]'</span>}`</span>}
+      aria-current={active === t ? <span class="s">'page'</span> : <span class="b">undefined</span>}
+    &gt;{t}&lt;/a&gt;
+  ))}
+&lt;/nav&gt;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Commit</span>
+<pre>git add src/components/TabStrip.astro
+git commit -m "feat(ui): tab strip with active styling"</pre></div>
+</div>
+
+<!-- T18 -->
+<div class="task">
+<h3>Task 18 · Page routes + index redirect</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/pages/index.astro</code> · <strong>Create:</strong> <code class="mono">src/pages/beautify.astro</code>, <code class="mono">src/pages/minify.astro</code>, <code class="mono">src/pages/validate.astro</code>, <code class="mono">src/pages/parse.astro</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Make <code class="mono">index.astro</code> a server redirect</span>
+<pre><span class="c">---</span>
+<span class="a">return</span> Astro.redirect(<span class="s">'/beautify'</span>, <span class="a">301</span>);
+<span class="c">---</span></pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Create each tool page with shared shell — example for <code class="mono">beautify.astro</code></span>
+<pre><span class="c">---</span>
+<span class="a">import</span> BaseLayout <span class="a">from</span> <span class="s">'../layouts/BaseLayout.astro'</span>;
+<span class="a">import</span> Header <span class="a">from</span> <span class="s">'../components/Header.astro'</span>;
+<span class="a">import</span> Footer <span class="a">from</span> <span class="s">'../components/Footer.astro'</span>;
+<span class="a">import</span> TabStrip <span class="a">from</span> <span class="s">'../components/TabStrip.astro'</span>;
+<span class="c">---</span>
+&lt;BaseLayout title=<span class="s">"Beautify JSON — jsontools"</span>
+            description=<span class="s">"Format and pretty-print JSON in your browser. Free, no tracking."</span>&gt;
+  &lt;div class=<span class="s">"min-h-screen flex flex-col"</span>&gt;
+    &lt;Header /&gt;
+    &lt;TabStrip active=<span class="s">"beautify"</span> /&gt;
+    &lt;main class=<span class="s">"flex-1 px-2 py-2"</span>&gt;
+      &lt;!-- Workspace island slotted in Task 19 --&gt;
+      &lt;div id=<span class="s">"workspace-root"</span> data-tool=<span class="s">"beautify"</span>&gt;&lt;/div&gt;
+    &lt;/main&gt;
+    &lt;Footer /&gt;
+  &lt;/div&gt;
+&lt;/BaseLayout&gt;</pre>
+Repeat with <code class="mono">data-tool</code> and <code class="mono">active</code> set per page for <code class="mono">minify.astro</code>, <code class="mono">validate.astro</code>, <code class="mono">parse.astro</code>. Adjust title/description per tool.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Verify routing</span>
+<pre>bun run dev</pre>
+Visit <code class="mono">/</code> — should 301 to <code class="mono">/beautify</code>. Click each tab; URL changes; active state highlights. Workspace area is empty placeholder for now.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Commit</span>
+<pre>git add -A
+git commit -m "feat(routes): four tool pages + / redirect to /beautify"</pre></div>
+</div>
+</section>
+
+<!-- =========================== PHASE 4 =========================== -->
+<section id="p4" class="phase">
+<h2>Phase 4 · Workspace island &amp; CodeMirror</h2>
+
+<!-- T19 -->
+<div class="task">
+<h3>Task 19 · Workspace.tsx skeleton — state, props, mount</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/components/Workspace.tsx</code>, <code class="mono">src/components/StatusBar.tsx</code> · <strong>Modify:</strong> each <code class="mono">src/pages/*.astro</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Create the component scaffold (no editor yet — wire in T20)</span>
+<pre><span class="c">// src/components/Workspace.tsx</span>
+<span class="a">import</span> { useState } <span class="a">from</span> <span class="s">'preact/hooks'</span>;
+<span class="a">import type</span> { BeautifyOptions, JsonError, Tool } <span class="a">from</span> <span class="s">'@/lib/json/types'</span>;
+<span class="a">import</span> StatusBar <span class="a">from</span> <span class="s">'./StatusBar'</span>;
+
+<span class="k">type</span> Props = { tool: Tool };
+
+<span class="a">export default function</span> Workspace({ tool }: Props) {
+  <span class="k">const</span> [input, setInput] = useState(<span class="s">''</span>);
+  <span class="k">const</span> [output, setOutput] = useState(<span class="s">''</span>);
+  <span class="k">const</span> [error, setError] = useState&lt;JsonError | <span class="b">null</span>&gt;(<span class="b">null</span>);
+  <span class="k">const</span> [status, setStatus] = useState(<span class="s">''</span>);
+  <span class="k">const</span> [opts, setOpts] = useState&lt;BeautifyOptions&gt;({ indent: <span class="a">2</span>, sortKeys: <span class="b">false</span> });
+
+  <span class="a">return</span> (
+    &lt;div class=<span class="s">"grid grid-cols-1 md:grid-cols-[1fr_56px_1fr] gap-0 border border-[var(--border)] rounded-md overflow-hidden"</span>&gt;
+      &lt;div class=<span class="s">"min-h-[60vh] bg-[var(--editor)] p-3 font-mono text-sm"</span>&gt;
+        &lt;textarea
+          value={input}
+          onInput={(e) =&gt; setInput((e.target <span class="a">as</span> HTMLTextAreaElement).value)}
+          class=<span class="s">"w-full h-full bg-transparent outline-none resize-none"</span>
+          placeholder='{"hello": "world"}'
+        /&gt;
+      &lt;/div&gt;
+      &lt;div class=<span class="s">"flex items-center justify-center bg-[var(--paper)] border-x border-[var(--border)]"</span>&gt;
+        &lt;button
+          onClick={() =&gt; { <span class="c">/* run wired in T22 */</span> }}
+          class=<span class="s">"text-[var(--amber)] border border-[var(--amber)] px-2 py-2 [writing-mode:vertical-rl] text-xs tracking-widest"</span>&gt;
+          {tool.toUpperCase()} ▶
+        &lt;/button&gt;
+      &lt;/div&gt;
+      &lt;div class=<span class="s">"min-h-[60vh] bg-[var(--editor)] p-3 font-mono text-sm whitespace-pre overflow-auto"</span>&gt;
+        {output || &lt;span class=<span class="s">"text-[var(--muted)]"</span>&gt;— no output —&lt;/span&gt;}
+      &lt;/div&gt;
+      &lt;div class=<span class="s">"col-span-full"</span>&gt;
+        &lt;StatusBar tool={tool} status={status} error={error} /&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Create <code class="mono">StatusBar.tsx</code></span>
+<pre><span class="c">// src/components/StatusBar.tsx</span>
+<span class="a">import type</span> { JsonError, Tool } <span class="a">from</span> <span class="s">'@/lib/json/types'</span>;
+
+<span class="k">type</span> Props = { tool: Tool; status: <span class="k">string</span>; error: JsonError | <span class="b">null</span> };
+
+<span class="a">export default function</span> StatusBar({ tool, status, error }: Props) {
+  <span class="a">return</span> (
+    &lt;div role=<span class="s">"status"</span> aria-live=<span class="s">"polite"</span>
+         class=<span class="s">"px-3 py-2 border-t text-xs flex gap-3 font-mono"</span>
+         style=<span class="s">"border-color: var(--border)"</span>&gt;
+      {error
+        ? &lt;span class=<span class="s">"text-[var(--error)]"</span>&gt;› {tool} failed at {error.line}:{error.column} — {error.hint ?? error.message}&lt;/span&gt;
+        : status
+          ? &lt;span&gt;› {status}&lt;/span&gt;
+          : &lt;span class=<span class="s">"text-[var(--muted)]"</span>&gt;› ready&lt;/span&gt;}
+    &lt;/div&gt;
+  );
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Slot Workspace into each page</span>
+Replace the placeholder div in <code class="mono">beautify.astro</code> (and the other three) with:
+<pre><span class="c">---</span>
+<span class="a">import</span> Workspace <span class="a">from</span> <span class="s">'../components/Workspace'</span>;
+<span class="c">---</span>
+&lt;Workspace tool=<span class="s">"beautify"</span> client:load /&gt;</pre>
+Set <code class="mono">tool</code> appropriately per page.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Verify in dev — type in left pane, see text; click action — no-op for now</span>
+<pre>bun run dev</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 5: Commit</span>
+<pre>git add -A
+git commit -m "feat(ui): workspace skeleton with status bar"</pre></div>
+</div>
+
+<!-- T20 -->
+<div class="task">
+<h3>Task 20 · CodeMirror 6 input editor with custom amber theme</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code> · <strong>Create:</strong> <code class="mono">src/lib/editor.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Install CodeMirror</span>
+<pre>bun add codemirror @codemirror/lang-json @codemirror/state @codemirror/view @codemirror/language @codemirror/commands @codemirror/lint</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Create <code class="mono">src/lib/editor.ts</code> with theme + helpers</span>
+<pre><span class="a">import</span> { EditorView, lineNumbers, highlightActiveLine } <span class="a">from</span> <span class="s">'@codemirror/view'</span>;
+<span class="a">import</span> { EditorState, Compartment } <span class="a">from</span> <span class="s">'@codemirror/state'</span>;
+<span class="a">import</span> { json, jsonParseLinter } <span class="a">from</span> <span class="s">'@codemirror/lang-json'</span>;
+<span class="a">import</span> { linter, lintGutter } <span class="a">from</span> <span class="s">'@codemirror/lint'</span>;
+<span class="a">import</span> { history, defaultKeymap, historyKeymap } <span class="a">from</span> <span class="s">'@codemirror/commands'</span>;
+<span class="a">import</span> { keymap, drawSelection } <span class="a">from</span> <span class="s">'@codemirror/view'</span>;
+<span class="a">import</span> { bracketMatching, syntaxHighlighting, defaultHighlightStyle } <span class="a">from</span> <span class="s">'@codemirror/language'</span>;
+
+<span class="a">export const</span> theme = EditorView.theme({
+  <span class="s">'&amp;'</span>: { backgroundColor: <span class="s">'var(--editor)'</span>, color: <span class="s">'var(--ink)'</span>, fontFamily: <span class="s">"'JetBrains Mono', monospace"</span>, fontSize: <span class="s">'14px'</span> },
+  <span class="s">'.cm-gutters'</span>: { backgroundColor: <span class="s">'var(--editor)'</span>, color: <span class="s">'var(--muted)'</span>, border: <span class="s">'none'</span> },
+  <span class="s">'.cm-activeLine'</span>: { backgroundColor: <span class="s">'transparent'</span> },
+  <span class="s">'.cm-activeLineGutter'</span>: { backgroundColor: <span class="s">'transparent'</span>, color: <span class="s">'var(--amber)'</span> },
+  <span class="s">'.cm-cursor'</span>: { borderLeftColor: <span class="s">'var(--amber)'</span>, borderLeftWidth: <span class="s">'2px'</span> },
+  <span class="s">'.cm-selectionBackground, ::selection'</span>: { backgroundColor: <span class="s">'color-mix(in srgb, var(--amber) 25%, transparent)'</span> },
+});
+
+<span class="a">export function</span> makeEditor(parent: HTMLElement, opts: { value: <span class="k">string</span>; readOnly?: <span class="k">boolean</span>; onChange?: (v: <span class="k">string</span>) =&gt; <span class="k">void</span> }) {
+  <span class="k">const</span> view = <span class="a">new</span> EditorView({
+    parent,
+    state: EditorState.create({
+      doc: opts.value,
+      extensions: [
+        lineNumbers(), lintGutter(), history(), bracketMatching(), drawSelection(), highlightActiveLine(),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: <span class="b">true</span> }),
+        json(),
+        linter(jsonParseLinter()),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
+        theme,
+        EditorView.editable.of(!opts.readOnly),
+        EditorState.readOnly.of(!!opts.readOnly),
+        EditorView.updateListener.of((u) =&gt; {
+          <span class="a">if</span> (u.docChanged &amp;&amp; opts.onChange) opts.onChange(u.state.doc.toString());
+        }),
+      ],
+    }),
+  });
+  <span class="a">return</span> view;
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Replace the textarea in Workspace with a CodeMirror mount</span>
+<pre><span class="a">import</span> { useEffect, useRef } <span class="a">from</span> <span class="s">'preact/hooks'</span>;
+<span class="a">import</span> { makeEditor } <span class="a">from</span> <span class="s">'@/lib/editor'</span>;
+<span class="a">import type</span> { EditorView } <span class="a">from</span> <span class="s">'@codemirror/view'</span>;
+
+<span class="c">// inside Workspace component, replace the textarea block with:</span>
+<span class="k">const</span> inputHost = useRef&lt;HTMLDivElement&gt;(<span class="b">null</span>);
+<span class="k">const</span> inputView = useRef&lt;EditorView | <span class="b">null</span>&gt;(<span class="b">null</span>);
+
+useEffect(() =&gt; {
+  <span class="a">if</span> (!inputHost.current) <span class="a">return</span>;
+  inputView.current = makeEditor(inputHost.current, {
+    value: input,
+    onChange: (v) =&gt; setInput(v),
+  });
+  <span class="a">return</span> () =&gt; inputView.current?.destroy();
+}, []);
+
+<span class="c">// In JSX:</span>
+&lt;div ref={inputHost} class=<span class="s">"min-h-[60vh] bg-[var(--editor)]"</span> /&gt;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Verify — paste JSON, see syntax highlighting + line numbers</span><pre>bun run dev</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 5: Commit</span>
+<pre>git add -A
+git commit -m "feat(editor): integrate CodeMirror 6 with amber theme"</pre></div>
+</div>
+
+<!-- T21 -->
+<div class="task">
+<h3>Task 21 · Output CodeMirror (readOnly) — mirror programmatic updates</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Mount a second editor for output; sync via dispatch</span>
+<pre><span class="k">const</span> outputHost = useRef&lt;HTMLDivElement&gt;(<span class="b">null</span>);
+<span class="k">const</span> outputView = useRef&lt;EditorView | <span class="b">null</span>&gt;(<span class="b">null</span>);
+
+useEffect(() =&gt; {
+  <span class="a">if</span> (!outputHost.current) <span class="a">return</span>;
+  outputView.current = makeEditor(outputHost.current, { value: <span class="s">''</span>, readOnly: <span class="b">true</span> });
+  <span class="a">return</span> () =&gt; outputView.current?.destroy();
+}, []);
+
+useEffect(() =&gt; {
+  <span class="k">const</span> v = outputView.current;
+  <span class="a">if</span> (!v) <span class="a">return</span>;
+  v.dispatch({ changes: { from: <span class="a">0</span>, to: v.state.doc.length, insert: output } });
+}, [output]);</pre>
+Replace the JSX `output` div with `&lt;div ref={outputHost} class=<span class="s">"min-h-[60vh]"</span> /&gt;`.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Commit</span>
+<pre>git add -A
+git commit -m "feat(editor): readOnly output editor synced via dispatch"</pre></div>
+</div>
+
+<!-- T22 -->
+<div class="task">
+<h3>Task 22 · Wire action button to dispatch the active tool</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code> · <strong>Create:</strong> <code class="mono">src/lib/json/index.ts</code> (barrel)</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Create barrel</span>
+<pre><span class="c">// src/lib/json/index.ts</span>
+<span class="a">export</span> { parse } <span class="a">from</span> <span class="s">'./parse'</span>;
+<span class="a">export</span> { beautify } <span class="a">from</span> <span class="s">'./beautify'</span>;
+<span class="a">export</span> { minify } <span class="a">from</span> <span class="s">'./minify'</span>;
+<span class="a">export</span> { validate } <span class="a">from</span> <span class="s">'./validate'</span>;
+<span class="a">export</span> { buildTree } <span class="a">from</span> <span class="s">'./tree'</span>;
+<span class="a">export type</span> * <span class="a">from</span> <span class="s">'./types'</span>;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Add the runner</span>
+<pre><span class="a">import</span> { beautify, minify, validate, buildTree, <span class="a">type</span> Tool, <span class="a">type</span> Result } <span class="a">from</span> <span class="s">'@/lib/json'</span>;
+
+<span class="k">function</span> runTool(tool: Tool, src: <span class="k">string</span>, opts: BeautifyOptions): Result {
+  <span class="a">switch</span> (tool) {
+    <span class="a">case</span> <span class="s">'beautify'</span>: <span class="a">return</span> beautify(src, opts);
+    <span class="a">case</span> <span class="s">'minify'</span>:   <span class="a">return</span> minify(src);
+    <span class="a">case</span> <span class="s">'validate'</span>: <span class="a">return</span> validate(src);
+    <span class="a">case</span> <span class="s">'parse'</span>: {
+      <span class="k">const</span> r = buildTree(src);
+      <span class="a">return</span> r.ok
+        ? { ok: <span class="b">true</span>, output: <span class="s">''</span>, stats: { bytes: <span class="a">0</span>, keys: <span class="a">0</span>, depth: <span class="a">0</span> } }
+        : { ok: <span class="b">false</span>, error: r.error, stats: <span class="b">null</span> };
+    }
+  }
+}
+
+<span class="k">const</span> run = () =&gt; {
+  <span class="k">const</span> r = runTool(tool, input, opts);
+  <span class="a">if</span> (r.ok) {
+    setOutput(r.output);
+    setError(<span class="b">null</span>);
+    <span class="a">if</span> (tool === <span class="s">'validate'</span>) setStatus(<span class="s">`valid · ${r.stats.keys} keys · depth ${r.stats.depth} · ${r.stats.bytes} B`</span>);
+    <span class="a">else if</span> (tool === <span class="s">'parse'</span>) setStatus(<span class="s">'parsed'</span>);
+    <span class="a">else</span> setStatus(<span class="s">`${tool}d · ${r.stats.bytes} B`</span>);
+  } <span class="a">else</span> {
+    setOutput(<span class="s">''</span>);
+    setError(r.error);
+    setStatus(<span class="s">''</span>);
+  }
+};
+
+<span class="c">// in the action button:</span>
+&lt;button onClick={run} ... &gt;{tool.toUpperCase()} ▶&lt;/button&gt;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Manually verify all four tools work end-to-end</span>
+<pre>bun run dev</pre>
+Paste <code class="mono">{"a":1,"b":[1,2]}</code> on each route — beautify expands, minify collapses, validate shows stats, parse shows "parsed" (tree rendered in T30).</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Commit</span>
+<pre>git add -A
+git commit -m "feat(workspace): wire action button to tool dispatcher"</pre></div>
+</div>
+
+<!-- T23 -->
+<div class="task">
+<h3>Task 23 · ToolOptions component + URL query binding</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/components/ToolOptions.tsx</code> · <strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Create <code class="mono">ToolOptions.tsx</code></span>
+<pre><span class="a">import type</span> { BeautifyOptions, Tool } <span class="a">from</span> <span class="s">'@/lib/json/types'</span>;
+
+<span class="k">type</span> Props = { tool: Tool; opts: BeautifyOptions; onChange: (o: BeautifyOptions) =&gt; <span class="k">void</span> };
+
+<span class="a">export default function</span> ToolOptions({ tool, opts, onChange }: Props) {
+  <span class="a">if</span> (tool !== <span class="s">'beautify'</span>) {
+    <span class="a">return</span> &lt;div class=<span class="s">"text-xs text-[var(--muted)] font-mono"</span>&gt;{tool} · no options&lt;/div&gt;;
+  }
+  <span class="k">const</span> indents: BeautifyOptions[<span class="s">'indent'</span>][] = [<span class="a">2</span>, <span class="a">4</span>, <span class="s">'\t'</span>];
+  <span class="a">return</span> (
+    &lt;div class=<span class="s">"flex items-center gap-4 text-xs font-mono"</span>&gt;
+      &lt;span class=<span class="s">"text-[var(--muted)]"</span>&gt;indent&lt;/span&gt;
+      &lt;div class=<span class="s">"flex border border-[var(--border)] rounded"</span>&gt;
+        {indents.map((i) =&gt; (
+          &lt;button
+            onClick={() =&gt; onChange({ ...opts, indent: i })}
+            class={<span class="s">`px-2 py-0.5 ${opts.indent === i ? <span class="s">'text-[var(--amber)]'</span> : <span class="s">'text-[var(--muted)]'</span>}`</span>}
+            aria-pressed={opts.indent === i}
+          &gt;{i === <span class="s">'\t'</span> ? <span class="s">'tab'</span> : i}&lt;/button&gt;
+        ))}
+      &lt;/div&gt;
+      &lt;label class=<span class="s">"flex items-center gap-1.5 cursor-pointer"</span>&gt;
+        &lt;input <span class="k">type</span>=<span class="s">"checkbox"</span> checked={opts.sortKeys}
+          onChange={(e) =&gt; onChange({ ...opts, sortKeys: (e.target <span class="a">as</span> HTMLInputElement).checked })} /&gt;
+        &lt;span&gt;sort keys&lt;/span&gt;
+      &lt;/label&gt;
+    &lt;/div&gt;
+  );
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: In Workspace, read URL on mount and sync option changes back to URL</span>
+<pre><span class="c">// inside Workspace</span>
+useEffect(() =&gt; {
+  <span class="k">const</span> u = <span class="a">new</span> URL(window.location.href);
+  <span class="k">const</span> indent = u.searchParams.get(<span class="s">'indent'</span>);
+  <span class="k">const</span> sort = u.searchParams.get(<span class="s">'sort'</span>);
+  <span class="a">if</span> (indent || sort) {
+    setOpts({
+      indent: indent === <span class="s">'tab'</span> ? <span class="s">'\t'</span> : indent === <span class="s">'4'</span> ? <span class="a">4</span> : <span class="a">2</span>,
+      sortKeys: sort === <span class="s">'1'</span>,
+    });
+  }
+}, []);
+
+<span class="k">const</span> updateOpts = (o: BeautifyOptions) =&gt; {
+  setOpts(o);
+  <span class="k">const</span> u = <span class="a">new</span> URL(window.location.href);
+  u.searchParams.set(<span class="s">'indent'</span>, o.indent === <span class="s">'\t'</span> ? <span class="s">'tab'</span> : <span class="k">String</span>(o.indent));
+  u.searchParams.set(<span class="s">'sort'</span>, o.sortKeys ? <span class="s">'1'</span> : <span class="s">'0'</span>);
+  history.replaceState({}, <span class="s">''</span>, u);
+};</pre>
+Place <code class="mono">&lt;ToolOptions tool={tool} opts={opts} onChange={updateOpts} /&gt;</code> in the status bar row (above StatusBar or beside it).</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Commit</span>
+<pre>git add -A
+git commit -m "feat(workspace): tool options bar + URL query binding"</pre></div>
+</div>
+
+<!-- T24 -->
+<div class="task">
+<h3>Task 24 · Error rendering — gutter marker, span selection, [ jump ] link</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code>, <code class="mono">src/components/StatusBar.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: On parse failure, scroll editor to the error offset and select the offending span</span>
+<pre><span class="c">// In Workspace, after setError(r.error):</span>
+<span class="k">const</span> v = inputView.current;
+<span class="a">if</span> (v &amp;&amp; r.error) {
+  v.dispatch({
+    selection: { anchor: r.error.offsetStart, head: r.error.offsetEnd },
+    scrollIntoView: <span class="b">true</span>,
+  });
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Add <code class="mono">[ jump ]</code> link in StatusBar that calls a passed handler</span>
+<pre><span class="c">// Workspace passes onJump that re-runs the dispatch:</span>
+<span class="k">const</span> jumpToError = () =&gt; {
+  <span class="k">const</span> v = inputView.current;
+  <span class="a">if</span> (v &amp;&amp; error) v.dispatch({
+    selection: { anchor: error.offsetStart, head: error.offsetEnd },
+    scrollIntoView: <span class="b">true</span>,
+  });
+  v?.focus();
+};
+
+&lt;StatusBar tool={tool} status={status} error={error} onJump={jumpToError} /&gt;</pre>
+In StatusBar, add the link when error is present:
+<pre>{error &amp;&amp; (
+  &lt;&gt;
+    &lt;span class=<span class="s">"text-[var(--error)]"</span>&gt;› {tool} failed at {error.line}:{error.column} — {error.hint ?? error.message}&lt;/span&gt;
+    &lt;button onClick={onJump} class=<span class="s">"text-[var(--amber)] underline-offset-2 hover:underline"</span>&gt;[ jump ]&lt;/button&gt;
+  &lt;/&gt;
+)}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Commit</span>
+<pre>git add -A
+git commit -m "feat(workspace): error span selection + [ jump ] link"</pre></div>
+</div>
+</section>
+
+<!-- =========================== PHASE 5 =========================== -->
+<section id="p5" class="phase">
+<h2>Phase 5 · Interactions</h2>
+
+<!-- T25 -->
+<div class="task">
+<h3>Task 25 · File picker + drag-drop with type/size guards</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code> · <strong>Create:</strong> <code class="mono">src/lib/fileInput.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Create <code class="mono">src/lib/fileInput.ts</code></span>
+<pre><span class="a">export const</span> MAX_FILE_BYTES = <span class="a">50</span> * <span class="a">1024</span> * <span class="a">1024</span>; <span class="c">// 50 MB</span>
+
+<span class="a">export type</span> FileLoad =
+  | { ok: <span class="b">true</span>; name: <span class="k">string</span>; content: <span class="k">string</span>; extraFiles: <span class="k">number</span> }
+  | { ok: <span class="b">false</span>; reason: <span class="k">string</span> };
+
+<span class="k">function</span> looksBinary(content: <span class="k">string</span>): <span class="k">boolean</span> {
+  <span class="c">// quick sniff: presence of NUL, or UTF-16 BOM</span>
+  <span class="a">return</span> content.charCodeAt(<span class="a">0</span>) === <span class="a">0xFFFE</span> || content.includes(<span class="s">'\0'</span>);
+}
+
+<span class="a">export async function</span> readFiles(files: FileList | File[]): Promise&lt;FileLoad&gt; {
+  <span class="k">const</span> arr = Array.from(files);
+  <span class="a">if</span> (arr.length === <span class="a">0</span>) <span class="a">return</span> { ok: <span class="b">false</span>, reason: <span class="s">'no file'</span> };
+  <span class="k">const</span> file = arr[<span class="a">0</span>];
+  <span class="a">if</span> (file.size &gt; MAX_FILE_BYTES) {
+    <span class="a">return</span> { ok: <span class="b">false</span>, reason: <span class="s">`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB) — limit is 50 MB`</span> };
+  }
+  <span class="k">const</span> content = <span class="a">await</span> file.text();
+  <span class="a">if</span> (looksBinary(content)) <span class="a">return</span> { ok: <span class="b">false</span>, reason: <span class="s">'Doesn\'t look like text — only .json/.txt files are supported'</span> };
+  <span class="a">return</span> { ok: <span class="b">true</span>, name: file.name, content, extraFiles: arr.length - <span class="a">1</span> };
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Wire file picker + drop zone in Workspace</span>
+<pre><span class="c">// Hidden &lt;input type="file"&gt; + button:</span>
+&lt;input <span class="a">type</span>=<span class="s">"file"</span> accept=<span class="s">".json,.txt,application/json,text/plain"</span> ref={fileRef}
+  class=<span class="s">"hidden"</span> onChange={onFileChange} /&gt;
+&lt;button onClick={() =&gt; fileRef.current?.click()}
+  class=<span class="s">"text-xs text-[var(--muted)] hover:text-[var(--amber)]"</span>&gt;upload file&lt;/button&gt;
+
+<span class="c">// Handlers:</span>
+<span class="k">const</span> setInputFromFile = <span class="a">async</span> (files: FileList | File[]) =&gt; {
+  <span class="k">const</span> r = <span class="a">await</span> readFiles(files);
+  <span class="a">if</span> (!r.ok) { setStatus(r.reason); <span class="a">return</span>; }
+  setInput(r.content);
+  inputView.current?.dispatch({ changes: { from: <span class="a">0</span>, to: inputView.current.state.doc.length, insert: r.content } });
+  setStatus(r.extraFiles &gt; <span class="a">0</span> ? <span class="s">`Multiple files dropped — using ${r.name}`</span> : <span class="s">`loaded ${r.name}`</span>);
+};
+
+<span class="k">const</span> onFileChange = (e: Event) =&gt; {
+  <span class="k">const</span> input = e.target <span class="a">as</span> HTMLInputElement;
+  <span class="a">if</span> (input.files) setInputFromFile(input.files);
+};
+
+<span class="c">// On the input editor wrapper:</span>
+&lt;div
+  ref={inputHost}
+  onDrop={(e) =&gt; {
+    e.preventDefault();
+    <span class="a">if</span> (e.dataTransfer?.files?.length) setInputFromFile(e.dataTransfer.files);
+  }}
+  onDragOver={(e) =&gt; e.preventDefault()}
+  class=<span class="s">"min-h-[60vh] bg-[var(--editor)]"</span>
+/&gt;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Commit</span>
+<pre>git add -A
+git commit -m "feat(workspace): file picker + drag-drop with size/type guards"</pre></div>
+</div>
+
+<!-- T26 -->
+<div class="task">
+<h3>Task 26 · Output actions: Copy + Download</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Add buttons under the output pane</span>
+<pre><span class="k">const</span> copy = <span class="a">async</span> () =&gt; {
+  <span class="a">try</span> { <span class="a">await</span> navigator.clipboard.writeText(output); setStatus(<span class="s">'copied'</span>); }
+  <span class="a">catch</span> { setStatus(<span class="s">"Couldn't copy — your browser blocked clipboard access"</span>); }
+};
+
+<span class="k">const</span> download = () =&gt; {
+  <span class="k">const</span> blob = <span class="a">new</span> Blob([output], { <span class="k">type</span>: <span class="s">'application/json'</span> });
+  <span class="k">const</span> a = document.createElement(<span class="s">'a'</span>);
+  a.href = URL.createObjectURL(blob);
+  a.download = <span class="s">`${tool}-output.json`</span>;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+&lt;div class=<span class="s">"flex gap-3 text-xs px-3 py-1.5"</span>&gt;
+  &lt;button onClick={copy}     disabled={!output} class=<span class="s">"text-[var(--muted)] hover:text-[var(--amber)] disabled:opacity-40"</span>&gt;copy&lt;/button&gt;
+  &lt;button onClick={download} disabled={!output} class=<span class="s">"text-[var(--muted)] hover:text-[var(--amber)] disabled:opacity-40"</span>&gt;download&lt;/button&gt;
+&lt;/div&gt;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Commit</span>
+<pre>git add -A
+git commit -m "feat(workspace): copy + download output actions"</pre></div>
+</div>
+
+<!-- T27 -->
+<div class="task">
+<h3>Task 27 · Keyboard shortcuts (⌘/Ctrl+Enter, ⌘/Ctrl+L)</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Add a global keydown listener that respects mod key by platform</span>
+<pre>useEffect(() =&gt; {
+  <span class="k">const</span> onKey = (e: KeyboardEvent) =&gt; {
+    <span class="k">const</span> mod = e.metaKey || e.ctrlKey;
+    <span class="a">if</span> (!mod) <span class="a">return</span>;
+    <span class="a">if</span> (e.key === <span class="s">'Enter'</span>) { e.preventDefault(); run(); }
+    <span class="a">else if</span> (e.key.toLowerCase() === <span class="s">'l'</span>) {
+      e.preventDefault();
+      setInput(<span class="s">''</span>); setOutput(<span class="s">''</span>); setError(<span class="b">null</span>); setStatus(<span class="s">'cleared'</span>);
+      inputView.current?.dispatch({ changes: { from: <span class="a">0</span>, to: inputView.current.state.doc.length, insert: <span class="s">''</span> } });
+    }
+  };
+  window.addEventListener(<span class="s">'keydown'</span>, onKey);
+  <span class="a">return</span> () =&gt; window.removeEventListener(<span class="s">'keydown'</span>, onKey);
+}, [run]);</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Commit</span>
+<pre>git add -A
+git commit -m "feat(workspace): keyboard shortcuts for run and clear"</pre></div>
+</div>
+
+<!-- T28 -->
+<div class="task">
+<h3>Task 28 · Debounced localStorage persistence</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Read on mount</span>
+<pre>useEffect(() =&gt; {
+  <span class="k">const</span> s = loadState();
+  <span class="a">if</span> (s &amp;&amp; s.tool === tool) {
+    setInput(s.input);
+    setOpts(s.options);
+    inputView.current?.dispatch({ changes: { from: <span class="a">0</span>, to: inputView.current.state.doc.length, insert: s.input } });
+  }
+}, []);</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Debounced write</span>
+<pre>useEffect(() =&gt; {
+  <span class="k">const</span> id = setTimeout(() =&gt; {
+    saveState({ schemaVersion: <span class="a">1</span>, input, tool, options: opts, theme: loadState()?.theme ?? <span class="s">'auto'</span> });
+  }, <span class="a">150</span>);
+  <span class="a">return</span> () =&gt; clearTimeout(id);
+}, [input, tool, opts]);</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Add a clear button next to "upload file"</span>
+<pre>&lt;button onClick={() =&gt; { clearState(); setInput(<span class="s">''</span>); setOutput(<span class="s">''</span>); setError(<span class="b">null</span>);
+  inputView.current?.dispatch({ changes: { from: <span class="a">0</span>, to: inputView.current.state.doc.length, insert: <span class="s">''</span> } }); }}
+  class=<span class="s">"text-xs text-[var(--muted)] hover:text-[var(--amber)]"</span>&gt;clear&lt;/button&gt;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Commit</span>
+<pre>git add -A
+git commit -m "feat(workspace): debounced persistence + clear button"</pre></div>
+</div>
+
+<!-- T29 -->
+<div class="task">
+<h3>Task 29 · Confirm theme cycle persists across reload</h3>
+<div class="files">No new files. Validation/exercise task — covered by the existing ThemeToggle and BaseLayout bootstrap.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Manual smoke</span>
+Open the site, click the theme toggle three times, reload — chosen theme persists, no flash of opposite theme on first paint.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Commit (no code changes) — skip if nothing changed</span></div>
+</div>
+</section>
+
+<!-- =========================== PHASE 6 =========================== -->
+<section id="p6" class="phase">
+<h2>Phase 6 · Tree explorer (/parse)</h2>
+
+<!-- T30 -->
+<div class="task">
+<h3>Task 30 · TreeExplorer — render + expand/collapse</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">src/components/TreeExplorer.tsx</code>, <code class="mono">tests/unit/lib/treeExplorer.test.tsx</code> · <strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Component test</span>
+<pre><span class="a">import</span> { render, screen } <span class="a">from</span> <span class="s">'@testing-library/preact'</span>;
+<span class="a">import</span> { describe, it, expect } <span class="a">from</span> <span class="s">'vitest'</span>;
+<span class="a">import</span> TreeExplorer <span class="a">from</span> <span class="s">'@/components/TreeExplorer'</span>;
+<span class="a">import</span> { buildTree } <span class="a">from</span> <span class="s">'@/lib/json/tree'</span>;
+
+describe(<span class="s">'TreeExplorer'</span>, () =&gt; {
+  it(<span class="s">'renders top-level keys'</span>, () =&gt; {
+    <span class="k">const</span> r = buildTree(<span class="s">'{"a":1,"b":2}'</span>);
+    <span class="a">if</span> (!r.ok) <span class="a">throw new Error</span>(<span class="s">'invalid'</span>);
+    render(&lt;TreeExplorer tree={r.tree} /&gt;);
+    expect(screen.getByText(<span class="s">'a'</span>)).<span class="a">toBeInTheDocument</span>();
+    expect(screen.getByText(<span class="s">'b'</span>)).<span class="a">toBeInTheDocument</span>();
+  });
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Implement TreeExplorer</span>
+<pre><span class="a">import</span> { useState } <span class="a">from</span> <span class="s">'preact/hooks'</span>;
+<span class="a">import type</span> { TreeNode } <span class="a">from</span> <span class="s">'@/lib/json/types'</span>;
+
+<span class="k">type</span> Props = { tree: TreeNode };
+
+<span class="k">function</span> Row({ node, depth }: { node: TreeNode; depth: <span class="k">number</span> }) {
+  <span class="k">const</span> [open, setOpen] = useState(depth &lt; <span class="a">2</span>);
+  <span class="k">const</span> isContainer = node.kind === <span class="s">'object'</span> || node.kind === <span class="s">'array'</span>;
+
+  <span class="k">const</span> copy = () =&gt; navigator.clipboard?.writeText(node.path);
+
+  <span class="a">return</span> (
+    &lt;div&gt;
+      &lt;div class=<span class="s">"flex items-center gap-1.5 px-2 py-0.5 hover:bg-[color-mix(in_srgb,var(--amber)_8%,transparent)]"</span>
+           style={{ paddingLeft: <span class="s">`${depth * 14 + 8}px`</span> }}&gt;
+        {isContainer
+          ? &lt;button onClick={() =&gt; setOpen(!open)} class=<span class="s">"text-[var(--muted)] w-3"</span>&gt;{open ? <span class="s">'▾'</span> : <span class="s">'▸'</span>}&lt;/button&gt;
+          : &lt;span class=<span class="s">"w-3"</span> /&gt;}
+        &lt;span class=<span class="s">"text-[var(--muted)] text-xs uppercase tracking-wider"</span>&gt;{node.kind}&lt;/span&gt;
+        &lt;span class=<span class="s">"text-[var(--ink)]"</span>&gt;{<span class="k">String</span>(node.key ?? <span class="s">'root'</span>)}&lt;/span&gt;
+        {!isContainer &amp;&amp; (
+          &lt;span class=<span class="s">"text-[var(--str)]"</span>&gt;{JSON.stringify((node <span class="a">as any</span>).value)}&lt;/span&gt;
+        )}
+        &lt;button onClick={copy} title={node.path || <span class="s">'(root)'</span>}
+          class=<span class="s">"ml-auto text-xs text-[var(--muted)] hover:text-[var(--amber)]"</span>&gt;⎘&lt;/button&gt;
+      &lt;/div&gt;
+      {isContainer &amp;&amp; open &amp;&amp; (node <span class="a">as any</span>).children.map((c: TreeNode) =&gt; (
+        &lt;Row node={c} depth={depth + <span class="a">1</span>} /&gt;
+      ))}
+    &lt;/div&gt;
+  );
+}
+
+<span class="a">export default function</span> TreeExplorer({ tree }: Props) {
+  <span class="a">return</span> &lt;div class=<span class="s">"font-mono text-sm py-2"</span>&gt;&lt;Row node={tree} depth={<span class="a">0</span>} /&gt;&lt;/div&gt;;
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Show TreeExplorer instead of output editor when <code class="mono">tool === 'parse'</code></span>
+<pre><span class="c">// In Workspace, maintain `tree` state set on successful parse:</span>
+<span class="k">const</span> [tree, setTree] = useState&lt;TreeNode | <span class="b">null</span>&gt;(<span class="b">null</span>);
+
+<span class="c">// inside the runner, parse case:</span>
+<span class="a">case</span> <span class="s">'parse'</span>: {
+  <span class="k">const</span> r = buildTree(input);
+  <span class="a">if</span> (r.ok) { setTree(r.tree); setError(<span class="b">null</span>); setStatus(<span class="s">'parsed'</span>); }
+  <span class="a">else</span>    { setTree(<span class="b">null</span>); setError(r.error); setStatus(<span class="s">''</span>); }
+  <span class="a">return</span>;
+}
+
+<span class="c">// In JSX, replace the output host with a conditional:</span>
+{tool === <span class="s">'parse'</span>
+  ? &lt;div class=<span class="s">"min-h-[60vh] bg-[var(--editor)] overflow-auto"</span>&gt;{tree &amp;&amp; &lt;TreeExplorer tree={tree} /&gt;}&lt;/div&gt;
+  : &lt;div ref={outputHost} class=<span class="s">"min-h-[60vh]"</span> /&gt;}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Run tests, commit</span>
+<pre>bun run test treeExplorer
+git add -A
+git commit -m "feat(parse): tree explorer with expand/collapse + copy path"</pre></div>
+</div>
+
+<!-- T31 -->
+<div class="task">
+<h3>Task 31 · TreeExplorer search filter</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/TreeExplorer.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Add a matcher helper</span>
+<pre><span class="k">function</span> matches(node: TreeNode, q: <span class="k">string</span>): <span class="k">boolean</span> {
+  <span class="a">if</span> (!q) <span class="a">return true</span>;
+  <span class="k">const</span> needle = q.toLowerCase();
+  <span class="k">const</span> keyHit = <span class="k">String</span>(node.key ?? <span class="s">''</span>).toLowerCase().includes(needle);
+  <span class="a">if</span> (keyHit) <span class="a">return true</span>;
+  <span class="a">if</span> (node.kind === <span class="s">'object'</span> || node.kind === <span class="s">'array'</span>) <span class="a">return</span> node.children.some((c) =&gt; matches(c, q));
+  <span class="a">return</span> JSON.stringify((node <span class="a">as any</span>).value).toLowerCase().includes(needle);
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Lift the query state to TreeExplorer and pass to Row</span>
+<pre><span class="a">export default function</span> TreeExplorer({ tree }: Props) {
+  <span class="k">const</span> [q, setQ] = useState(<span class="s">''</span>);
+  <span class="a">return</span> (
+    &lt;div class=<span class="s">"font-mono text-sm py-2"</span>&gt;
+      &lt;input
+        value={q}
+        onInput={(e) =&gt; setQ((e.target <span class="a">as</span> HTMLInputElement).value)}
+        placeholder=<span class="s">"search keys or values…"</span>
+        class=<span class="s">"w-full mb-2 px-2 py-1 bg-transparent border border-[var(--border)] rounded text-xs"</span>
+        aria-label=<span class="s">"Filter tree"</span>
+      /&gt;
+      &lt;Row node={tree} depth={<span class="a">0</span>} q={q} /&gt;
+    &lt;/div&gt;
+  );
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Update <code class="mono">Row</code> to honor <code class="mono">q</code> — hide non-matches, force-open ancestors of matches</span>
+<pre><span class="k">function</span> Row({ node, depth, q }: { node: TreeNode; depth: <span class="k">number</span>; q: <span class="k">string</span> }) {
+  <span class="k">const</span> [open, setOpen] = useState(depth &lt; <span class="a">2</span>);
+  <span class="k">const</span> isContainer = node.kind === <span class="s">'object'</span> || node.kind === <span class="s">'array'</span>;
+
+  <span class="a">if</span> (q &amp;&amp; !matches(node, q)) <span class="a">return null</span>;
+  <span class="k">const</span> effectiveOpen = q ? <span class="b">true</span> : open;
+
+  <span class="k">const</span> copy = () =&gt; navigator.clipboard?.writeText(node.path);
+
+  <span class="a">return</span> (
+    &lt;div data-row&gt;
+      &lt;div class=<span class="s">"flex items-center gap-1.5 px-2 py-0.5 hover:bg-[color-mix(in_srgb,var(--amber)_8%,transparent)]"</span>
+           style={{ paddingLeft: <span class="s">`${depth * 14 + 8}px`</span> }}&gt;
+        {isContainer
+          ? &lt;button onClick={() =&gt; setOpen(!open)} class=<span class="s">"text-[var(--muted)] w-3"</span>
+              aria-label={effectiveOpen ? <span class="s">'Collapse'</span> : <span class="s">'Expand'</span>}&gt;{effectiveOpen ? <span class="s">'▾'</span> : <span class="s">'▸'</span>}&lt;/button&gt;
+          : &lt;span class=<span class="s">"w-3"</span> /&gt;}
+        &lt;span class=<span class="s">"text-[var(--muted)] text-xs uppercase tracking-wider"</span>&gt;{node.kind}&lt;/span&gt;
+        &lt;span class=<span class="s">"text-[var(--ink)]"</span>&gt;{<span class="k">String</span>(node.key ?? <span class="s">'root'</span>)}&lt;/span&gt;
+        {!isContainer &amp;&amp; (
+          &lt;span class=<span class="s">"text-[var(--str)]"</span>&gt;{JSON.stringify((node <span class="a">as any</span>).value)}&lt;/span&gt;
+        )}
+        &lt;button onClick={copy} aria-label={<span class="s">`Copy path ${node.path || <span class="s">'(root)'</span>}`</span>}
+          class=<span class="s">"ml-auto text-xs text-[var(--muted)] hover:text-[var(--amber)]"</span>&gt;⎘&lt;/button&gt;
+      &lt;/div&gt;
+      {isContainer &amp;&amp; effectiveOpen &amp;&amp; (node <span class="a">as any</span>).children.map((c: TreeNode) =&gt; (
+        &lt;Row node={c} depth={depth + <span class="a">1</span>} q={q} /&gt;
+      ))}
+    &lt;/div&gt;
+  );
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Commit</span>
+<pre>git add -A
+git commit -m "feat(parse): tree search filter with ancestor auto-expand"</pre></div>
+</div>
+
+<!-- T32 -->
+<div class="task">
+<h3>Task 32 · TreeExplorer virtualization for &gt; 1000 rows</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/TreeExplorer.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Add a flattener that walks the tree honoring expand state</span>
+<pre><span class="k">type</span> FlatRow = { node: TreeNode; depth: <span class="k">number</span> };
+
+<span class="k">function</span> flatten(node: TreeNode, depth: <span class="k">number</span>, openSet: Set&lt;<span class="k">string</span>&gt;, out: FlatRow[], q: <span class="k">string</span>): <span class="k">void</span> {
+  <span class="a">if</span> (q &amp;&amp; !matches(node, q)) <span class="a">return</span>;
+  out.push({ node, depth });
+  <span class="k">const</span> isContainer = node.kind === <span class="s">'object'</span> || node.kind === <span class="s">'array'</span>;
+  <span class="a">if</span> (!isContainer) <span class="a">return</span>;
+  <span class="k">const</span> open = q ? <span class="b">true</span> : openSet.has(node.path) || depth &lt; <span class="a">2</span>;
+  <span class="a">if</span> (open) <span class="a">for</span> (<span class="k">const</span> c <span class="a">of</span> (node <span class="a">as any</span>).children) flatten(c, depth + <span class="a">1</span>, openSet, out, q);
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Rewrite <code class="mono">TreeExplorer</code> to use windowed rendering above 1,000 rows</span>
+<pre><span class="k">const</span> ROW_H = <span class="a">24</span>;
+<span class="k">const</span> WINDOW_PAD = <span class="a">10</span>;
+
+<span class="a">export default function</span> TreeExplorer({ tree }: Props) {
+  <span class="k">const</span> [q, setQ] = useState(<span class="s">''</span>);
+  <span class="k">const</span> [openSet, setOpenSet] = useState&lt;Set&lt;<span class="k">string</span>&gt;&gt;(<span class="a">new</span> Set());
+  <span class="k">const</span> [scrollTop, setScrollTop] = useState(<span class="a">0</span>);
+  <span class="k">const</span> [viewport, setViewport] = useState(<span class="a">0</span>);
+
+  <span class="k">const</span> rows: FlatRow[] = [];
+  flatten(tree, <span class="a">0</span>, openSet, rows, q);
+
+  <span class="k">const</span> virtualize = rows.length &gt; <span class="a">1000</span>;
+  <span class="k">const</span> startIdx = virtualize ? Math.max(<span class="a">0</span>, Math.floor(scrollTop / ROW_H) - WINDOW_PAD) : <span class="a">0</span>;
+  <span class="k">const</span> endIdx   = virtualize ? Math.min(rows.length, Math.ceil((scrollTop + viewport) / ROW_H) + WINDOW_PAD) : rows.length;
+  <span class="k">const</span> visible = rows.slice(startIdx, endIdx);
+
+  <span class="k">const</span> toggle = (path: <span class="k">string</span>) =&gt; {
+    <span class="k">const</span> next = <span class="a">new</span> Set(openSet);
+    <span class="a">if</span> (next.has(path)) next.delete(path); <span class="a">else</span> next.add(path);
+    setOpenSet(next);
+  };
+
+  <span class="a">return</span> (
+    &lt;div class=<span class="s">"font-mono text-sm"</span>&gt;
+      &lt;input
+        value={q}
+        onInput={(e) =&gt; setQ((e.target <span class="a">as</span> HTMLInputElement).value)}
+        placeholder=<span class="s">"search keys or values…"</span>
+        class=<span class="s">"w-full px-2 py-1 bg-transparent border-b border-[var(--border)] text-xs"</span>
+        aria-label=<span class="s">"Filter tree"</span>
+      /&gt;
+      &lt;div
+        class=<span class="s">"max-h-[60vh] overflow-auto relative"</span>
+        onScroll={(e) =&gt; setScrollTop((e.target <span class="a">as</span> HTMLElement).scrollTop)}
+        ref={(el) =&gt; { <span class="a">if</span> (el) setViewport(el.clientHeight); }}
+      &gt;
+        {virtualize &amp;&amp; &lt;div style={{ height: <span class="s">`${startIdx * ROW_H}px`</span> }} /&gt;}
+        {visible.map(({ node, depth }) =&gt; (
+          &lt;Row node={node} depth={depth} q={q}
+            open={q ? <span class="b">true</span> : openSet.has(node.path) || depth &lt; <span class="a">2</span>}
+            onToggle={() =&gt; toggle(node.path)} /&gt;
+        ))}
+        {virtualize &amp;&amp; &lt;div style={{ height: <span class="s">`${(rows.length - endIdx) * ROW_H}px`</span> }} /&gt;}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}</pre>
+The <code class="mono">Row</code> component should be updated to receive <code class="mono">open</code> and <code class="mono">onToggle</code> from props (no more local state) and render at a fixed <code class="mono">height: 24px</code>.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Add a fixture test against a 1200-row synthetic tree</span>
+<pre>it(<span class="s">'renders only a window of rows for large trees'</span>, () =&gt; {
+  <span class="k">const</span> big = JSON.stringify(Object.fromEntries(Array.from({ length: <span class="a">1500</span> }, (_, i) =&gt; [<span class="s">`k${i}`</span>, i])));
+  <span class="k">const</span> r = buildTree(big);
+  <span class="a">if</span> (!r.ok) <span class="a">throw new Error</span>(<span class="s">'invalid'</span>);
+  <span class="k">const</span> { container } = render(&lt;TreeExplorer tree={r.tree} /&gt;);
+  expect(container.querySelectorAll(<span class="s">'[data-row]'</span>).length).<span class="a">toBeLessThan</span>(<span class="a">200</span>);
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Commit</span>
+<pre>git add -A
+git commit -m "perf(parse): virtualize tree rows above 1000"</pre></div>
+</div>
+</section>
+
+<!-- =========================== PHASE 7 =========================== -->
+<section id="p7" class="phase">
+<h2>Phase 7 · Edge cases &amp; a11y</h2>
+
+<!-- T33 -->
+<div class="task">
+<h3>Task 33 · Large payload warning + hard confirm at 50 MB</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Compute byte size on input change (debounced TextEncoder)</span>
+<pre><span class="k">const</span> [bytes, setBytes] = useState(<span class="a">0</span>);
+useEffect(() =&gt; {
+  <span class="k">const</span> id = setTimeout(() =&gt; setBytes(<span class="a">new</span> TextEncoder().encode(input).length), <span class="a">200</span>);
+  <span class="a">return</span> () =&gt; clearTimeout(id);
+}, [input]);
+
+<span class="k">const</span> FIVE_MB = <span class="a">5</span> * <span class="a">1024</span> * <span class="a">1024</span>;
+<span class="k">const</span> FIFTY_MB = <span class="a">50</span> * <span class="a">1024</span> * <span class="a">1024</span>;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Render a non-blocking warning above the editor when bytes &gt; 5 MB</span>
+<pre>{bytes &gt; FIVE_MB &amp;&amp; (
+  &lt;div class=<span class="s">"text-xs text-[var(--amber)] px-3 py-1.5 border-b"</span> style=<span class="s">"border-color: var(--border)"</span>&gt;
+    Large payload ({(bytes / <span class="a">1024</span> / <span class="a">1024</span>).toFixed(<span class="a">1</span>)} MB) — operation may take a moment.
+  &lt;/div&gt;
+)}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Hard confirm gate in <code class="mono">run()</code></span>
+<pre><span class="a">if</span> (bytes &gt; FIFTY_MB &amp;&amp; !confirm(<span class="s">`This input is ${(bytes/1024/1024).toFixed(0)} MB. Proceed?`</span>)) <span class="a">return</span>;</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Commit</span>
+<pre>git add -A
+git commit -m "feat(workspace): large-payload warning + 50MB hard confirm"</pre></div>
+</div>
+
+<!-- T34 -->
+<div class="task">
+<h3>Task 34 · A11y pass — focus rings, aria-labels, contrast verify</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/styles/global.css</code>, various components</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Add focus-visible ring globally</span>
+<pre>:focus-visible {
+  outline: <span class="a">2</span>px solid var(--amber);
+  outline-offset: <span class="a">2</span>px;
+  border-radius: <span class="a">2</span>px;
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Audit each interactive element for an aria-label</span>
+- Theme toggle: already labeled.
+- Action button: <code class="mono">aria-label={<span class="s">`Run ${tool}`</span>}</code>
+- File upload button: <code class="mono">aria-label=<span class="s">"Upload JSON file"</span></code>
+- Tree copy-path button: <code class="mono">aria-label={<span class="s">`Copy path ${node.path}`</span>}</code>
+- Tabs: already use <code class="mono">aria-current=<span class="s">"page"</span></code>.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Commit</span>
+<pre>git add -A
+git commit -m "a11y: focus rings + complete aria labels"</pre></div>
+</div>
+
+<!-- T35 -->
+<div class="task">
+<h3>Task 35 · Tighten reduced-motion + duplicate-key notice surface</h3>
+<div class="files"><strong>Modify:</strong> <code class="mono">src/components/Workspace.tsx</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Surface validate notices in status bar after a successful run</span>
+<pre><span class="c">// In run() after a successful r:</span>
+<span class="a">if</span> (r.notices?.length) setStatus((s) =&gt; <span class="s">`${s} · ${r.notices!.join(' · ')}`</span>);</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Verify blink already respects <code class="mono">prefers-reduced-motion</code> (it does — set in global.css)</span></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Commit</span>
+<pre>git add -A
+git commit -m "feat(validate): surface duplicate-key notice in status"</pre></div>
+</div>
+</section>
+
+<!-- =========================== PHASE 8 =========================== -->
+<section id="p8" class="phase">
+<h2>Phase 8 · E2E &amp; CI</h2>
+
+<!-- T36 -->
+<div class="task">
+<h3>Task 36 · Critical E2E flows</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">tests/e2e/landing.spec.ts</code>, <code class="mono">tests/e2e/beautify-flow.spec.ts</code>, <code class="mono">tests/e2e/minify-flow.spec.ts</code>, <code class="mono">tests/e2e/validate-flow.spec.ts</code>, <code class="mono">tests/e2e/parse-flow.spec.ts</code>, <code class="mono">tests/e2e/routing.spec.ts</code>, <code class="mono">tests/e2e/persistence.spec.ts</code>, <code class="mono">tests/e2e/a11y.spec.ts</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: <code class="mono">landing.spec.ts</code></span>
+<pre><span class="a">import</span> { test, expect } <span class="a">from</span> <span class="s">'@playwright/test'</span>;
+
+test(<span class="s">'/ redirects to /beautify and shows the editor'</span>, <span class="a">async</span> ({ page }) =&gt; {
+  <span class="a">await</span> page.goto(<span class="s">'/'</span>);
+  <span class="a">await</span> expect(page).<span class="a">toHaveURL</span>(<span class="s">/\/beautify$/</span>);
+  <span class="a">await</span> expect(page.getByRole(<span class="s">'link'</span>, { name: <span class="s">/^beautify$/</span> })).<span class="a">toHaveAttribute</span>(<span class="s">'aria-current'</span>, <span class="s">'page'</span>);
+  <span class="a">await</span> expect(page.getByRole(<span class="s">'button'</span>, { name: <span class="s">/run beautify/i</span> })).<span class="a">toBeVisible</span>();
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: <code class="mono">beautify-flow.spec.ts</code></span>
+<pre><span class="a">import</span> { test, expect } <span class="a">from</span> <span class="s">'@playwright/test'</span>;
+
+test(<span class="s">'beautify formats minified input'</span>, <span class="a">async</span> ({ page }) =&gt; {
+  <span class="a">await</span> page.goto(<span class="s">'/beautify'</span>);
+  <span class="a">await</span> page.locator(<span class="s">'.cm-content'</span>).first().<span class="a">click</span>();
+  <span class="a">await</span> page.keyboard.<span class="a">type</span>(<span class="s">'{"a":1,"b":[1,2]}'</span>);
+  <span class="a">await</span> page.getByRole(<span class="s">'button'</span>, { name: <span class="s">/run beautify/i</span> }).<span class="a">click</span>();
+  <span class="a">await</span> expect(page.locator(<span class="s">'.cm-content'</span>).nth(<span class="a">1</span>)).<span class="a">toContainText</span>(<span class="s">'  "a": 1'</span>);
+});
+
+test(<span class="s">'sort keys reorders'</span>, <span class="a">async</span> ({ page }) =&gt; {
+  <span class="a">await</span> page.goto(<span class="s">'/beautify'</span>);
+  <span class="a">await</span> page.locator(<span class="s">'.cm-content'</span>).first().<span class="a">click</span>();
+  <span class="a">await</span> page.keyboard.<span class="a">type</span>(<span class="s">'{"b":1,"a":2}'</span>);
+  <span class="a">await</span> page.getByRole(<span class="s">'checkbox'</span>, { name: <span class="s">/sort keys/i</span> }).<span class="a">check</span>();
+  <span class="a">await</span> page.getByRole(<span class="s">'button'</span>, { name: <span class="s">/run beautify/i</span> }).<span class="a">click</span>();
+  <span class="k">const</span> out = <span class="a">await</span> page.locator(<span class="s">'.cm-content'</span>).nth(<span class="a">1</span>).<span class="a">innerText</span>();
+  expect(out.indexOf(<span class="s">'"a"'</span>)).<span class="a">toBeLessThan</span>(out.indexOf(<span class="s">'"b"'</span>));
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: <code class="mono">minify-flow.spec.ts</code>, <code class="mono">validate-flow.spec.ts</code>, <code class="mono">parse-flow.spec.ts</code></span>
+Follow the same pattern. For validate: paste broken JSON, assert the status bar contains <code class="mono">/parse failed at \d+:\d+/</code> and a <code class="mono">[ jump ]</code> button. For parse: assert a row with text <code class="mono">"email"</code> exists after pasting <code class="mono">{"users":[{"email":"x"}]}</code>.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: <code class="mono">routing.spec.ts</code> — tab navigation, back button, query params on direct load</span>
+<pre>test(<span class="s">'?indent=tab applies on direct load'</span>, <span class="a">async</span> ({ page }) =&gt; {
+  <span class="a">await</span> page.goto(<span class="s">'/beautify?indent=tab&amp;sort=1'</span>);
+  <span class="a">await</span> expect(page.getByRole(<span class="s">'button'</span>, { name: <span class="s">'tab'</span> })).<span class="a">toHaveAttribute</span>(<span class="s">'aria-pressed'</span>, <span class="s">'true'</span>);
+});</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 5: <code class="mono">persistence.spec.ts</code> — content survives reload; Clear empties</span></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 6: <code class="mono">a11y.spec.ts</code> — axe scan on each route</span>
+<pre><span class="a">import</span> AxeBuilder <span class="a">from</span> <span class="s">'@axe-core/playwright'</span>;
+<span class="a">import</span> { test, expect } <span class="a">from</span> <span class="s">'@playwright/test'</span>;
+
+<span class="a">for</span> (<span class="k">const</span> route <span class="a">of</span> [<span class="s">'/beautify'</span>, <span class="s">'/minify'</span>, <span class="s">'/validate'</span>, <span class="s">'/parse'</span>]) {
+  test(<span class="s">`a11y: ${route}`</span>, <span class="a">async</span> ({ page }) =&gt; {
+    <span class="a">await</span> page.goto(route);
+    <span class="k">const</span> results = <span class="a">await new</span> AxeBuilder({ page }).<span class="a">withTags</span>([<span class="s">'wcag2a'</span>, <span class="s">'wcag2aa'</span>]).<span class="a">analyze</span>();
+    expect(results.violations.filter((v) =&gt; v.impact === <span class="s">'serious'</span> || v.impact === <span class="s">'critical'</span>)).<span class="a">toEqual</span>([]);
+  });
+}</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 7: Run the e2e suite locally</span>
+<pre>bun run build
+bun run test:e2e</pre>
+Fix failures. Commit per spec.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 8: Commit</span>
+<pre>git add -A
+git commit -m "test(e2e): landing, beautify, minify, validate, parse, routing, persistence, a11y"</pre></div>
+</div>
+
+<!-- T37 -->
+<div class="task">
+<h3>Task 37 · GitHub Actions CI workflow</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">.github/workflows/ci.yml</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Create the workflow</span>
+<pre><span class="k">name</span>: ci
+<span class="k">on</span>:
+  pull_request:
+  push: { branches: [main] }
+
+<span class="k">jobs</span>:
+  <span class="k">build-and-test</span>:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run test
+      - run: bun run build
+      - run: bunx playwright install --with-deps chromium webkit
+      - run: bun run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: playwright-report, path: playwright-report }</pre></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Commit and push</span>
+<pre>git add .github/workflows/ci.yml
+git commit -m "ci: lint, typecheck, unit, build, e2e on PR + main"</pre></div>
+</div>
+</section>
+
+<!-- =========================== PHASE 9 =========================== -->
+<section id="p9" class="phase">
+<h2>Phase 9 · Deploy</h2>
+
+<!-- T38 -->
+<div class="task">
+<h3>Task 38 · Cloudflare Pages + custom domain + Analytics token + favicon/OG</h3>
+<div class="files"><strong>Create:</strong> <code class="mono">public/favicon.svg</code>, <code class="mono">public/og-image.png</code>, <code class="mono">public/robots.txt</code> · <strong>Modify:</strong> <code class="mono">src/layouts/BaseLayout.astro</code></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 1: Create <code class="mono">public/favicon.svg</code></span>
+A simple terminal-cursor mark on an amber square. (Manual asset task — keep it under 1 KB.)</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 2: Create <code class="mono">public/og-image.png</code></span>
+1200×630, dark background, amber text mark <code class="mono">jsontools_</code>, tagline "beautify · minify · validate · parse". Manual export.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 3: Create <code class="mono">public/robots.txt</code></span>
+<pre>User-agent: *
+Allow: /
+Sitemap: https://jsontools.erikdao.com/sitemap-index.xml</pre>
+Install Astro sitemap: <code class="mono">bunx astro add sitemap --yes</code>. Set <code class="mono">site: 'https://jsontools.erikdao.com'</code> in <code class="mono">astro.config.mjs</code>.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 4: Push to GitHub and connect Cloudflare Pages (manual one-time)</span>
+<ol class="list-decimal pl-6 text-sm">
+  <li>Create public GitHub repo <code class="mono">erikdao/json-tools</code>, push.</li>
+  <li>Cloudflare dashboard → Pages → "Connect to Git" → select repo.</li>
+  <li>Build command: <code class="mono">bun install --frozen-lockfile &amp;&amp; bun run build</code>. Output: <code class="mono">dist</code>. Node compat: enabled.</li>
+  <li>Deploy. First URL: <code class="mono">json-tools.pages.dev</code>.</li>
+  <li>Add custom domain <code class="mono">jsontools.erikdao.com</code> in Pages → Custom Domains.</li>
+  <li>Enable Cloudflare Web Analytics for the domain; copy the beacon token.</li>
+</ol></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 5: Replace the analytics placeholder token in <code class="mono">BaseLayout.astro</code></span>
+Replace <code class="mono">REPLACE_AFTER_DEPLOY</code> with the real token; commit and push.</div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 6: Smoke-test production</span>
+<ol class="list-decimal pl-6 text-sm">
+  <li><code class="mono">https://jsontools.erikdao.com/</code> → 301 to <code class="mono">/beautify</code>.</li>
+  <li>Each tool runs against the sample JSON.</li>
+  <li>Lighthouse on <code class="mono">/beautify</code> ≥ 95 across all categories.</li>
+  <li>CF Analytics dashboard records the visit.</li>
+  <li>Walk the 12-item manual QA checklist from the spec (§7).</li>
+</ol></div>
+
+<div class="step"><span class="cb">- [ ]</span> <span class="label">Step 7: Commit any final tweaks and tag v0.1</span>
+<pre>git tag v0.1
+git push --tags</pre></div>
+</div>
+</section>
+
+<footer class="meta text-xs mt-16 pt-6" style="border-top: 1px solid var(--border)">
+  <p>Plan authored 2026-05-13 · spec at <code class="mono">docs/superpowers/specs/2026-05-13-json-tools-design.html</code> (979e527) · 38 tasks across 9 phases · execute via <code class="mono">superpowers:subagent-driven-development</code> or <code class="mono">superpowers:executing-plans</code>.</p>
+</footer>
+
+</body>
+</html>
