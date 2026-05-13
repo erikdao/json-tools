@@ -10,6 +10,9 @@ import TreeExplorer from './TreeExplorer';
 import { readFiles } from '@/lib/fileInput';
 import { loadState, saveState, clearState } from '@/lib/storage';
 
+const FIVE_MB = 5 * 1024 * 1024;
+const FIFTY_MB = 50 * 1024 * 1024;
+
 type Props = { tool: Tool };
 
 export default function Workspace({ tool }: Props) {
@@ -19,6 +22,7 @@ export default function Workspace({ tool }: Props) {
   const [status, setStatus] = useState('');
   const [opts, setOpts] = useState<BeautifyOptions>({ indent: 2, sortKeys: false });
   const [tree, setTree] = useState<TreeNode | null>(null);
+  const [bytes, setBytes] = useState(0);
 
   const inputHost = useRef<HTMLDivElement>(null);
   const inputView = useRef<EditorView | null>(null);
@@ -90,6 +94,11 @@ export default function Workspace({ tool }: Props) {
     return () => clearTimeout(id);
   }, [input, tool, opts]);
 
+  useEffect(() => {
+    const id = setTimeout(() => setBytes(new TextEncoder().encode(input).length), 200);
+    return () => clearTimeout(id);
+  }, [input]);
+
   function runTool(tool: Tool, src: string, opts: BeautifyOptions): Result {
     switch (tool) {
       case 'beautify': return beautify(src, opts);
@@ -128,6 +137,7 @@ export default function Workspace({ tool }: Props) {
   };
 
   const run = () => {
+    if (bytes > FIFTY_MB && !confirm(`This input is ${(bytes/1024/1024).toFixed(0)} MB. Proceed?`)) return;
     if (tool === 'parse') {
       const r = buildTree(input);
       if (r.ok) {
@@ -219,6 +229,11 @@ export default function Workspace({ tool }: Props) {
 
   return (
     <div class="grid grid-cols-1 md:grid-cols-[1fr_56px_1fr] gap-0 border border-[var(--border)] rounded-md overflow-hidden">
+      {bytes > FIVE_MB && (
+        <div class="text-xs text-[var(--amber)] px-3 py-1.5 border-b" style="border-color: var(--border)">
+          Large payload ({(bytes / 1024 / 1024).toFixed(1)} MB) — operation may take a moment.
+        </div>
+      )}
       <div
         ref={inputHost}
         onDrop={(e) => {
