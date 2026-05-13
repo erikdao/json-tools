@@ -16,6 +16,8 @@ export default function Workspace({ tool }: Props) {
 
   const inputHost = useRef<HTMLDivElement>(null);
   const inputView = useRef<EditorView | null>(null);
+  const outputHost = useRef<HTMLDivElement>(null);
+  const outputView = useRef<EditorView | null>(null);
 
   useEffect(() => {
     if (!inputHost.current) return;
@@ -25,6 +27,18 @@ export default function Workspace({ tool }: Props) {
     });
     return () => inputView.current?.destroy();
   }, []);
+
+  useEffect(() => {
+    if (!outputHost.current) return;
+    outputView.current = makeEditor(outputHost.current, { value: '', readOnly: true });
+    return () => outputView.current?.destroy();
+  }, []);
+
+  useEffect(() => {
+    const v = outputView.current;
+    if (!v) return;
+    v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: output } });
+  }, [output]);
 
   return (
     <div class="grid grid-cols-1 md:grid-cols-[1fr_56px_1fr] gap-0 border border-[var(--border)] rounded-md overflow-hidden">
@@ -36,9 +50,7 @@ export default function Workspace({ tool }: Props) {
           {tool.toUpperCase()} ▶
         </button>
       </div>
-      <div class="min-h-[60vh] bg-[var(--editor)] p-3 font-mono text-sm whitespace-pre overflow-auto">
-        {output || <span class="text-[var(--muted)]">— no output —</span>}
-      </div>
+      <div ref={outputHost} class="min-h-[60vh]" />
       <div class="col-span-full">
         <StatusBar tool={tool} status={status} error={error} />
       </div>
