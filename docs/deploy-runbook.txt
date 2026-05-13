@@ -1,0 +1,21 @@
+Manual T38 steps remaining (do NOT execute from agent; require operator action):
+
+1. Push the repo to GitHub at erikdao/json-tools (or similar).
+2. Cloudflare dashboard → Pages → "Connect to Git" → select repo.
+3. Build settings:
+   - Build command: bun install --frozen-lockfile && bun run build
+   - Output: dist
+   - Compatibility flags: enable Node compat
+4. First deploy URL: <project-name>.pages.dev
+5. Add custom domain jsontools.erikdao.com in Pages → Custom Domains.
+6. Enable Cloudflare Web Analytics for the custom domain.
+7. Copy the beacon token from the CF Analytics setup.
+8. Replace 'REPLACE_AFTER_DEPLOY' in src/layouts/BaseLayout.astro with the real token.
+9. Commit and push the analytics token update.
+10. Create public/og-image.png per spec (see public/og-image.png.todo), and add a <meta property="og:image" content="/og-image.png" /> tag in BaseLayout's <head>.
+11. Tag the release: git tag v0.1 && git push --tags
+12. Smoke-test production:
+    - https://jsontools.erikdao.com/ → 301 to /beautify
+    - Each tool runs the sample JSON
+    - Lighthouse on /beautify >= 95 across all categories
+    - CF Analytics dashboard records the visit

@@ -1,8 +1,10 @@
+import { defineConfig } from 'astro/config';
 import preact from '@astrojs/preact';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'astro/config';
+import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
-  integrations: [preact()],
+  site: 'https://jsontools.erikdao.com',
+  integrations: [preact(), sitemap()],
   vite: { plugins: [tailwindcss()] },
 });

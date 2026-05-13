@@ -1,0 +1,9 @@
+TODO — create public/og-image.png
+
+Spec:
+- 1200 × 630 pixels
+- Dark background (#0d0f12)
+- Amber text mark "jsontools_" (use Inter or JetBrains Mono, ~96px)
+- Tagline: "beautify · minify · validate · parse"
+
+Used by the og:image meta tag for social sharing (currently absent from BaseLayout — operator must add a <meta property="og:image" content="/og-image.png" /> tag in BaseLayout once the file exists).
