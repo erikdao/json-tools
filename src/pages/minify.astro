@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import TabStrip from '../components/TabStrip.astro';
+---
+<BaseLayout title="Minify JSON — jsontools"
+            description="Compress JSON to a single line. Free, no tracking.">
+  <div class="min-h-screen flex flex-col">
+    <Header />
+    <TabStrip active="minify" />
+    <main class="flex-1 px-2 py-2">
+      <!-- Workspace island slotted in Task 19 -->
+      <div id="workspace-root" data-tool="minify"></div>
+    </main>
+    <Footer />
+  </div>
+</BaseLayout>
