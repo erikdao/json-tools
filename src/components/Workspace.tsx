@@ -88,7 +88,23 @@ export default function Workspace({ tool }: Props) {
       setOutput('');
       setError(r.error);
       setStatus('');
+      const v = inputView.current;
+      if (v && r.error) {
+        v.dispatch({
+          selection: { anchor: r.error.offsetStart, head: r.error.offsetEnd },
+          scrollIntoView: true,
+        });
+      }
     }
+  };
+
+  const jumpToError = () => {
+    const v = inputView.current;
+    if (v && error) v.dispatch({
+      selection: { anchor: error.offsetStart, head: error.offsetEnd },
+      scrollIntoView: true,
+    });
+    v?.focus();
   };
 
   return (
@@ -106,7 +122,7 @@ export default function Workspace({ tool }: Props) {
         <div class="flex items-center justify-between px-3 py-1.5 border-t" style="border-color: var(--border)">
           <ToolOptions tool={tool} opts={opts} onChange={updateOpts} />
         </div>
-        <StatusBar tool={tool} status={status} error={error} />
+        <StatusBar tool={tool} status={status} error={error} onJump={jumpToError} />
       </div>
     </div>
   );
