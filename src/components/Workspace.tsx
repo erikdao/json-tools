@@ -5,6 +5,7 @@ import { beautify, minify, validate, buildTree } from '@/lib/json';
 import { makeEditor } from '@/lib/editor';
 import type { EditorView } from '@codemirror/view';
 import StatusBar from './StatusBar';
+import ToolOptions from './ToolOptions';
 
 type Props = { tool: Tool };
 
@@ -19,6 +20,18 @@ export default function Workspace({ tool }: Props) {
   const inputView = useRef<EditorView | null>(null);
   const outputHost = useRef<HTMLDivElement>(null);
   const outputView = useRef<EditorView | null>(null);
+
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    const indent = u.searchParams.get('indent');
+    const sort = u.searchParams.get('sort');
+    if (indent || sort) {
+      setOpts({
+        indent: indent === 'tab' ? '\t' : indent === '4' ? 4 : 2,
+        sortKeys: sort === '1',
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (!inputHost.current) return;
@@ -55,6 +68,14 @@ export default function Workspace({ tool }: Props) {
     }
   }
 
+  const updateOpts = (o: BeautifyOptions) => {
+    setOpts(o);
+    const u = new URL(window.location.href);
+    u.searchParams.set('indent', o.indent === '\t' ? 'tab' : String(o.indent));
+    u.searchParams.set('sort', o.sortKeys ? '1' : '0');
+    history.replaceState({}, '', u);
+  };
+
   const run = () => {
     const r = runTool(tool, input, opts);
     if (r.ok) {
@@ -82,6 +103,9 @@ export default function Workspace({ tool }: Props) {
       </div>
       <div ref={outputHost} class="min-h-[60vh]" />
       <div class="col-span-full">
+        <div class="flex items-center justify-between px-3 py-1.5 border-t" style="border-color: var(--border)">
+          <ToolOptions tool={tool} opts={opts} onChange={updateOpts} />
+        </div>
         <StatusBar tool={tool} status={status} error={error} />
       </div>
     </div>
