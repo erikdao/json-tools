@@ -11,4 +11,12 @@ describe('TreeExplorer', () => {
     expect(screen.getByText('a')).toBeInTheDocument();
     expect(screen.getByText('b')).toBeInTheDocument();
   });
+
+  it('renders only a window of rows for large trees', () => {
+    const big = JSON.stringify(Object.fromEntries(Array.from({ length: 1500 }, (_, i) => [`k${i}`, i])));
+    const r = buildTree(big);
+    if (!r.ok) throw new Error('invalid');
+    const { container } = render(<TreeExplorer tree={r.tree} />);
+    expect(container.querySelectorAll('[data-row]').length).toBeLessThan(200);
+  });
 });

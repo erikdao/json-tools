@@ -3,6 +3,8 @@ import type { TreeNode } from '@/lib/json/types';
 
 type Props = { tree: TreeNode };
 
+type FlatRow = { node: TreeNode; depth: number };
+
 function matches(node: TreeNode, q: string): boolean {
   if (!q) return true;
   const needle = q.toLowerCase();
@@ -12,22 +14,28 @@ function matches(node: TreeNode, q: string): boolean {
   return JSON.stringify((node as any).value).toLowerCase().includes(needle);
 }
 
-function Row({ node, depth, q }: { node: TreeNode; depth: number; q: string }) {
-  const [open, setOpen] = useState(depth < 2);
+function flatten(node: TreeNode, depth: number, openSet: Set<string>, out: FlatRow[], q: string): void {
+  if (q && !matches(node, q)) return;
+  out.push({ node, depth });
   const isContainer = node.kind === 'object' || node.kind === 'array';
+  if (!isContainer) return;
+  const open = q ? true : openSet.has(node.path) || depth < 2;
+  if (open) for (const c of (node as any).children) flatten(c, depth + 1, openSet, out, q);
+}
 
-  if (q && !matches(node, q)) return null;
-  const effectiveOpen = q ? true : open;
+function Row({ node, depth, q, open, onToggle }: { node: TreeNode; depth: number; q: string; open: boolean; onToggle: () => void }) {
+  const isContainer = node.kind === 'object' || node.kind === 'array';
+  // No q-based early return here — flatten() already skipped non-matches.
 
   const copy = () => navigator.clipboard?.writeText(node.path);
 
   return (
-    <div data-row>
+    <div data-row style={{ height: `${24}px` }}>
       <div class="flex items-center gap-1.5 px-2 py-0.5 hover:bg-[color-mix(in_srgb,var(--amber)_8%,transparent)]"
            style={{ paddingLeft: `${depth * 14 + 8}px` }}>
         {isContainer
-          ? <button onClick={() => setOpen(!open)} class="text-[var(--muted)] w-3"
-              aria-label={effectiveOpen ? 'Collapse' : 'Expand'}>{effectiveOpen ? '▾' : '▸'}</button>
+          ? <button onClick={onToggle} class="text-[var(--muted)] w-3"
+              aria-label={open ? 'Collapse' : 'Expand'}>{open ? '▾' : '▸'}</button>
           : <span class="w-3" />}
         <span class="text-[var(--muted)] text-xs uppercase tracking-wider">{node.kind}</span>
         <span class="text-[var(--ink)]">{String(node.key ?? 'root')}</span>
@@ -37,25 +45,55 @@ function Row({ node, depth, q }: { node: TreeNode; depth: number; q: string }) {
         <button onClick={copy} aria-label={`Copy path ${node.path || '(root)'}`}
           class="ml-auto text-xs text-[var(--muted)] hover:text-[var(--amber)]">⎘</button>
       </div>
-      {isContainer && effectiveOpen && (node as any).children.map((c: TreeNode) => (
-        <Row node={c} depth={depth + 1} q={q} />
-      ))}
     </div>
   );
 }
 
+const ROW_H = 24;
+const WINDOW_PAD = 10;
+
 export default function TreeExplorer({ tree }: Props) {
   const [q, setQ] = useState('');
+  const [openSet, setOpenSet] = useState<Set<string>>(new Set());
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewport, setViewport] = useState(0);
+
+  const rows: FlatRow[] = [];
+  flatten(tree, 0, openSet, rows, q);
+
+  const virtualize = rows.length > 1000;
+  const startIdx = virtualize ? Math.max(0, Math.floor(scrollTop / ROW_H) - WINDOW_PAD) : 0;
+  const endIdx   = virtualize ? Math.min(rows.length, Math.ceil((scrollTop + viewport) / ROW_H) + WINDOW_PAD) : rows.length;
+  const visible = rows.slice(startIdx, endIdx);
+
+  const toggle = (path: string) => {
+    const next = new Set(openSet);
+    if (next.has(path)) next.delete(path); else next.add(path);
+    setOpenSet(next);
+  };
+
   return (
-    <div class="font-mono text-sm py-2">
+    <div class="font-mono text-sm">
       <input
         value={q}
         onInput={(e) => setQ((e.target as HTMLInputElement).value)}
         placeholder="search keys or values…"
-        class="w-full mb-2 px-2 py-1 bg-transparent border border-[var(--border)] rounded text-xs"
+        class="w-full px-2 py-1 bg-transparent border-b border-[var(--border)] text-xs"
         aria-label="Filter tree"
       />
-      <Row node={tree} depth={0} q={q} />
+      <div
+        class="max-h-[60vh] overflow-auto relative"
+        onScroll={(e) => setScrollTop((e.target as HTMLElement).scrollTop)}
+        ref={(el) => { if (el) setViewport(el.clientHeight); }}
+      >
+        {virtualize && <div style={{ height: `${startIdx * ROW_H}px` }} />}
+        {visible.map(({ node, depth }) => (
+          <Row node={node} depth={depth} q={q}
+            open={q ? true : openSet.has(node.path) || depth < 2}
+            onToggle={() => toggle(node.path)} />
+        ))}
+        {virtualize && <div style={{ height: `${(rows.length - endIdx) * ROW_H}px` }} />}
+      </div>
     </div>
   );
 }
