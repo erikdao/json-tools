@@ -18,7 +18,7 @@ const HINTS: ReadonlyArray<{
   // V8: "Unexpected token ',' …" fires for comma where a value is expected
   // (e.g. trailing comma before ] or double-comma).
   {
-    test: /Unexpected token ','|Unexpected token .{0,4}[}\]]/,
+    test: /Unexpected token ','|Unexpected token ['"]?[}\]]['"]?/,
     hint: 'Trailing comma — JSON does not allow trailing commas before } or ].',
   },
   // V8: "Expected property name or '}' in JSON at position N"

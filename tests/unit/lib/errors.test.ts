@@ -40,5 +40,6 @@ describe('normalizeJsonError', () => {
   it('returns no hint when the message has no match', () => {
     const e = parseError('@@@');
     expect(e.message).toBeTruthy();
+    expect(e.hint).toBeUndefined();
   });
 });
