@@ -164,6 +164,7 @@ export default function Workspace({ tool }: Props) {
       setError(null);
       if (tool === 'validate') setStatus(`valid · ${r.stats.keys} keys · depth ${r.stats.depth} · ${r.stats.bytes} B`);
       else setStatus(`${tool}d · ${r.stats.bytes} B`);
+      if (r.notices?.length) setStatus((s) => `${s} · ${r.notices!.join(' · ')}`);
     } else {
       setOutput('');
       setError(r.error);
