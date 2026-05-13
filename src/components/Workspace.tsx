@@ -1,6 +1,8 @@
 // src/components/Workspace.tsx
-import { useState } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import type { BeautifyOptions, JsonError, Tool } from '@/lib/json/types';
+import { makeEditor } from '@/lib/editor';
+import type { EditorView } from '@codemirror/view';
 import StatusBar from './StatusBar';
 
 type Props = { tool: Tool };
@@ -12,16 +14,21 @@ export default function Workspace({ tool }: Props) {
   const [status, setStatus] = useState('');
   const [opts, setOpts] = useState<BeautifyOptions>({ indent: 2, sortKeys: false });
 
+  const inputHost = useRef<HTMLDivElement>(null);
+  const inputView = useRef<EditorView | null>(null);
+
+  useEffect(() => {
+    if (!inputHost.current) return;
+    inputView.current = makeEditor(inputHost.current, {
+      value: input,
+      onChange: (v) => setInput(v),
+    });
+    return () => inputView.current?.destroy();
+  }, []);
+
   return (
     <div class="grid grid-cols-1 md:grid-cols-[1fr_56px_1fr] gap-0 border border-[var(--border)] rounded-md overflow-hidden">
-      <div class="min-h-[60vh] bg-[var(--editor)] p-3 font-mono text-sm">
-        <textarea
-          value={input}
-          onInput={(e) => setInput((e.target as HTMLTextAreaElement).value)}
-          class="w-full h-full bg-transparent outline-none resize-none"
-          placeholder='{"hello": "world"}'
-        />
-      </div>
+      <div ref={inputHost} class="min-h-[60vh] bg-[var(--editor)]" />
       <div class="flex items-center justify-center bg-[var(--paper)] border-x border-[var(--border)]">
         <button
           onClick={() => { /* run wired in T22 */ }}
