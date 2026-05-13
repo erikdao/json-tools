@@ -69,6 +69,13 @@ export default function Workspace({ tool }: Props) {
   }, [output]);
 
   useEffect(() => {
+    const v = inputView.current;
+    if (!v) return;
+    if (v.state.doc.toString() === input) return;
+    v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: input } });
+  }, [input]);
+
+  useEffect(() => {
     const id = setTimeout(() => {
       saveState({
         schemaVersion: 1,
