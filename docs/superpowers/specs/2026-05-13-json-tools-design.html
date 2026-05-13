@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>jsontools.erikdao.com — Design Spec</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #fbf8f1;
+      --ink: #1f1a14;
+      --muted: #6c635a;
+      --border: #e6dccb;
+      --amber: #b8801a;
+      --amber-soft: #f5b647;
+      --code-bg: #0d0f12;
+      --code-text: #d8d8c2;
+      --code-muted: #6c7480;
+      --code-amber: #f5b647;
+      --code-key: #7fc8a9;
+      --code-str: #e5b870;
+      --code-bool: #c594e3;
+    }
+    html { font-family: 'Inter', system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+    code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .accent { color: var(--amber); }
+    .border-paper { border-color: var(--border); }
+    h1, h2, h3, h4 { letter-spacing: -0.015em; }
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border: 1px solid #1f242a;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    pre .k { color: var(--code-key); }
+    pre .s { color: var(--code-str); }
+    pre .b { color: var(--code-bool); }
+    pre .c { color: var(--code-muted); }
+    pre .a { color: var(--code-amber); }
+    .meta-row { color: var(--muted); }
+    table { border-collapse: collapse; }
+    th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; vertical-align: top; text-align: left; font-size: 14px; }
+    th { background: #f3ede1; font-weight: 600; }
+    .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #f3ede1; color: var(--muted); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+    .toc a { color: var(--amber); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .section-divider { border-top: 1px solid var(--border); }
+    .callout { background: #f6f1e8; border-left: 3px solid var(--amber); padding: 0.75rem 1rem; border-radius: 0 4px 4px 0; }
+    .blink { animation: blink 1s steps(2) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .blink { animation: none; } }
+  </style>
+</head>
+<body class="max-w-4xl mx-auto px-6 py-12">
+
+  <header class="mb-12">
+    <div class="meta-row text-sm mono mb-2">jsontools.erikdao.com<span class="blink">_</span></div>
+    <h1 class="text-4xl font-semibold mb-1">Design Spec</h1>
+    <div class="meta-row text-sm">
+      <span class="mono">2026-05-13</span> · drafted by Erik Dao with Claude · status: <span class="accent font-medium">approved for planning</span>
+    </div>
+  </header>
+
+  <nav class="toc mb-10 text-sm">
+    <ol class="space-y-1 list-decimal list-inside meta-row">
+      <li><a href="#overview">Overview &amp; goals</a></li>
+      <li><a href="#decisions">Locked decisions</a></li>
+      <li><a href="#architecture">Architecture &amp; deployment</a></li>
+      <li><a href="#components">Components &amp; UX</a></li>
+      <li><a href="#dataflow">Data flow</a></li>
+      <li><a href="#errors">Error handling &amp; edge cases</a></li>
+      <li><a href="#testing">Testing</a></li>
+      <li><a href="#out-of-scope">Out of scope (v1)</a></li>
+      <li><a href="#open">Open follow-ups</a></li>
+    </ol>
+  </nav>
+
+  <!-- ============== OVERVIEW ============== -->
+  <section id="overview" class="mb-12">
+    <h2 class="text-2xl font-semibold mb-3">1 · Overview &amp; goals</h2>
+    <p class="mb-3">A small, fast, beautiful collection of client-side JSON tools hosted at <span class="mono">jsontools.erikdao.com</span>. Four tools share one workspace: <strong>Beautify</strong>, <strong>Minify</strong>, <strong>Validate</strong>, <strong>Parse</strong> (interactive tree explorer).</p>
+    <p class="mb-3">Constraints:</p>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li>Open to anyone — no auth, no rate limits.</li>
+      <li>Static-only — Cloudflare Pages, no Workers, no KV.</li>
+      <li>All processing in the browser; nothing is uploaded.</li>
+      <li>Bundle target &lt; 150 KB gzipped for the critical path.</li>
+      <li>Handles payloads up to ~5 MB without main-thread strain.</li>
+    </ul>
+    <p>Success looks like: paste anything reasonable, get the result in under 250 ms, and the page is satisfying enough to bookmark. No ads. No cookies. No upsell.</p>
+  </section>
+
+  <!-- ============== DECISIONS ============== -->
+  <section id="decisions" class="mb-12 section-divider pt-10">
+    <h2 class="text-2xl font-semibold mb-3">2 · Locked decisions (from brainstorm)</h2>
+    <table class="w-full">
+      <tr><th class="w-1/3">Area</th><th>Decision</th></tr>
+      <tr><td>Tech stack</td><td>Astro 5+ · TypeScript · Tailwind CSS v4 · Preact (via <span class="mono">@astrojs/preact</span>)</td></tr>
+      <tr><td>Package manager</td><td>Bun</td></tr>
+      <tr><td>Editor</td><td>CodeMirror 6 with <span class="mono">@codemirror/lang-json</span></td></tr>
+      <tr><td>Structure</td><td>One unified workspace; four tool routes (<span class="mono">/beautify</span>, <span class="mono">/minify</span>, <span class="mono">/validate</span>, <span class="mono">/parse</span>); <span class="mono">/</span> serves a redirect to <span class="mono">/beautify</span> for a canonical URL</td></tr>
+      <tr><td>Input methods</td><td>Paste · file picker · drag-drop</td></tr>
+      <tr><td>Output actions</td><td>Copy · Download (<span class="mono">.json</span>)</td></tr>
+      <tr><td>Beautify options</td><td>Indent <span class="mono">2 / 4 / tab</span> · Sort keys toggle</td></tr>
+      <tr><td>Validate behavior</td><td>Strict <span class="mono">JSON.parse</span> + great error UX with hint catalog</td></tr>
+      <tr><td>Parse behavior</td><td>Custom tree explorer with expand/collapse, search, copy-path</td></tr>
+      <tr><td>Performance budget</td><td>Main-thread processing up to ~5 MB; warning above; hard confirm above 50 MB</td></tr>
+      <tr><td>Persistence</td><td>localStorage of input + tool + options + theme; Clear button purges</td></tr>
+      <tr><td>Theme</td><td>Auto (system) + manual cycle (auto → light → dark); persisted</td></tr>
+      <tr><td>Aesthetic</td><td>Terminal / mono · Honey Amber accent <span class="mono">#F5B647</span> (dark) / <span class="mono">#B8801A</span> (light)</td></tr>
+      <tr><td>UI font</td><td>JetBrains Mono for all UI text + code; Inter as fallback in tables/long copy if needed</td></tr>
+      <tr><td>Hosting</td><td>Cloudflare Pages, static build, custom domain</td></tr>
+      <tr><td>Analytics</td><td>Cloudflare Web Analytics (no cookies, no consent banner needed)</td></tr>
+      <tr><td>Source</td><td>Public GitHub repo, linked from header + footer</td></tr>
+    </table>
+  </section>
+
+  <!-- ============== ARCHITECTURE ============== -->
+  <section id="architecture" class="mb-12 section-divider pt-10">
+    <h2 class="text-2xl font-semibold mb-3">3 · Architecture &amp; deployment</h2>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Astro + island hydration</h3>
+    <p class="mb-3">Astro ships zero JS by default for static content (header, footer, marketing copy, per-tool intro). The single client island is the workspace component, hydrated with <span class="mono">client:load</span>. Critical-path JS is dominated by CodeMirror 6 (~80 KB gz).</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Routes</h3>
+    <p class="mb-3">Four tool routes share one layout; <span class="mono">/</span> serves a redirect. The active tool determines (a) the middle-column action button, (b) the options bar, and (c) whether the right pane is a CodeMirror output or the TreeExplorer:</p>
+    <ul class="list-disc pl-6 space-y-1 mb-3 mono text-sm">
+      <li><span class="accent">/</span> → server redirect to <span class="accent">/beautify</span> (single canonical URL, no duplicate content)</li>
+      <li><span class="accent">/beautify</span> · <span class="accent">/minify</span> · <span class="accent">/validate</span></li>
+      <li><span class="accent">/parse</span> (right pane = TreeExplorer)</li>
+    </ul>
+    <p class="mb-3">Tab strip uses real <span class="mono">&lt;a&gt;</span> links for SEO and progressive enhancement; client-side navigation swaps the active tool without a full reload (Astro View Transitions).</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Repository layout</h3>
+<pre><span class="c">src/</span>
+  <span class="k">layouts/</span>    BaseLayout.astro
+  <span class="k">components/</span> Header.astro · Footer.astro · TabStrip.astro
+              Workspace.tsx · ToolOptions.tsx · TreeExplorer.tsx
+  <span class="k">lib/</span>
+    json/      parse.ts · beautify.ts · minify.ts · validate.ts
+               sortKeys.ts · tree.ts · errors.ts
+    storage.ts · keyboard.ts · types.ts
+  <span class="k">pages/</span>     index.astro · beautify.astro · minify.astro
+              validate.astro · parse.astro
+  <span class="k">styles/</span>    global.css (Tailwind + theme tokens)
+<span class="c">public/</span>     favicon.svg · og-image.png · robots.txt
+<span class="c">tests/</span>
+  unit/        *.test.ts (Vitest)
+  e2e/         *.spec.ts (Playwright)
+  fixtures/    sample-*.json
+<span class="c">docs/</span>       superpowers/specs/*.html</pre>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Deployment pipeline</h3>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li>Cloudflare Pages, GitHub integration.</li>
+      <li>Build: <span class="mono">bun install --frozen-lockfile &amp;&amp; bun run build</span> → output <span class="mono">dist/</span>.</li>
+      <li>Custom domain <span class="mono">jsontools.erikdao.com</span> via CF DNS.</li>
+      <li>Cloudflare Web Analytics script tag in <span class="mono">BaseLayout.astro</span>.</li>
+      <li>PR previews enabled (visual review per change).</li>
+    </ul>
+  </section>
+
+  <!-- ============== COMPONENTS ============== -->
+  <section id="components" class="mb-12 section-divider pt-10">
+    <h2 class="text-2xl font-semibold mb-3">4 · Components &amp; UX</h2>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Workspace island</h3>
+    <p class="mb-3">Single Preact component, mounted with <span class="mono">client:load</span>. State owner of:</p>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li>Input string, output string, current tool, per-tool options, error info.</li>
+      <li>Two CodeMirror 6 instances — input (editable) and output (<span class="mono">readOnly</span>). Custom theme matches the terminal palette; JSON language pack provides syntax highlighting and lint markers.</li>
+      <li>Action column (middle pane): vertical action button labeled by current tool (<span class="mono">BEAUTIFY ▶</span>, etc.). Triggered by click or <span class="mono">⌘/Ctrl + Enter</span>.</li>
+    </ul>
+    <p class="mb-3">When the route is <span class="mono">/parse</span>, the right CodeMirror is swapped for the <span class="mono">TreeExplorer</span> component.</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">TreeExplorer (the /parse tool)</h3>
+    <p class="mb-3">Custom, not a library — keeps the terminal aesthetic intact and is ~200 LOC. Behavior:</p>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li>Renders parsed value as nested rows; each container has an expand/collapse caret.</li>
+      <li>Each row: type chip · key · color-coded value · <span class="mono">⎘</span> copies the JSON path (e.g. <span class="mono">data.users[0].email</span>).</li>
+      <li>Search input at top of pane filters by key or value substring; matches highlight, ancestors auto-expand.</li>
+      <li>Type chip palette: <span class="mono">obj</span> · <span class="mono">arr</span> · <span class="mono">str</span> · <span class="mono">num</span> · <span class="mono">bool</span> · <span class="mono">null</span> in muted amber.</li>
+      <li>Virtualization kicks in above 1,000 rendered rows (rare); below that, a flat DOM tree is simpler and more reliable.</li>
+    </ul>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Options bar (bottom of workspace)</h3>
+    <table class="w-full mb-3">
+      <tr><th>Tool</th><th>Bar contents</th></tr>
+      <tr><td class="mono">/beautify</td><td>Indent segmented <span class="mono">2 · 4 · tab</span> · Sort keys checkbox</td></tr>
+      <tr><td class="mono">/minify</td><td>Muted text: <span class="mono">› minify · no options</span></td></tr>
+      <tr><td class="mono">/validate</td><td>After run: <span class="mono">› valid · 4 keys · depth 3 · 342 B</span> or error message in red with <span class="mono">[ jump ]</span> link</td></tr>
+      <tr><td class="mono">/parse</td><td>Muted text; search input lives inside the explorer pane</td></tr>
+    </table>
+    <p class="mb-3">Option values reflect in the URL as query params (<span class="mono">?indent=tab&amp;sort=1</span>) so links can be preconfigured.</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Header &amp; footer</h3>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li>Header: <span class="mono">jsontools_</span> wordmark (blinking underscore, respects <span class="mono">prefers-reduced-motion</span>) · theme cycle button (<span class="mono">auto → light → dark</span>) · <span class="mono">Source ↗</span> GitHub link.</li>
+      <li>Footer (single muted line): <span class="mono">built by erik · no tracking · v0.1 · source ↗</span>.</li>
+    </ul>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Mobile (&lt; <span class="mono">md</span> breakpoint, 768 px)</h3>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li>Panes stack vertically: input → action row → output (or TreeExplorer).</li>
+      <li>Action button becomes a full-width horizontal row.</li>
+      <li>Tab strip becomes horizontally scrollable.</li>
+      <li>Drag-drop still works (touch devices generally don't trigger it, but the file picker handles their case).</li>
+    </ul>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Theme palettes</h3>
+    <table class="w-full mb-3">
+      <tr><th>Role</th><th>Dark</th><th>Light</th></tr>
+      <tr><td>Background</td><td class="mono">#0D0F12</td><td class="mono">#FBF8F1</td></tr>
+      <tr><td>Editor surface</td><td class="mono">#15181C</td><td class="mono">#FFFEFB</td></tr>
+      <tr><td>Text</td><td class="mono">#D8D8C2</td><td class="mono">#1F1A14</td></tr>
+      <tr><td>Muted</td><td class="mono">#6C7480</td><td class="mono">#8A8275</td></tr>
+      <tr><td>Border</td><td class="mono">#1F242A</td><td class="mono">#E9E2D2</td></tr>
+      <tr><td>Accent (honey amber)</td><td class="mono">#F5B647</td><td class="mono">#B8801A</td></tr>
+      <tr><td>JSON key</td><td class="mono">#7FC8A9</td><td class="mono">#3F7E5D</td></tr>
+      <tr><td>JSON string</td><td class="mono">#E5B870</td><td class="mono">#8A5B12</td></tr>
+      <tr><td>JSON bool/null</td><td class="mono">#C594E3</td><td class="mono">#6B3D8A</td></tr>
+    </table>
+    <p class="mb-3">Both modes meet WCAG AA (4.5:1) for body and accent text.</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Distinctive small touches</h3>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li>Trailing underscore in <span class="mono">jsontools_</span> blinks at 1 Hz, like a terminal cursor.</li>
+      <li>Status messages prefix with <span class="mono">›</span> for prompt feel.</li>
+      <li>Hover states use a 1px amber underline rather than a color swap — keeps the chrome quiet.</li>
+    </ul>
+  </section>
+
+  <!-- ============== DATAFLOW ============== -->
+  <section id="dataflow" class="mb-12 section-divider pt-10">
+    <h2 class="text-2xl font-semibold mb-3">5 · Data flow</h2>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Lifecycle of one operation</h3>
+    <ol class="list-decimal pl-6 space-y-1 mb-3">
+      <li>Input arrives via paste / typing, file picker, or drag-drop → all funnel into <span class="mono">setInput(string)</span>.</li>
+      <li><span class="mono">setInput</span> debounces 150 ms and writes to localStorage.</li>
+      <li>User runs the tool — click or <span class="mono">⌘/Ctrl + Enter</span> → <span class="mono">runActiveTool(input, options)</span>.</li>
+      <li>Pure tool function in <span class="mono">lib/json/</span> returns a discriminated union <span class="mono">Result</span>.</li>
+      <li>Success → <span class="mono">output</span> + <span class="mono">stats</span> render in the right pane and status bar. Failure → editor gets gutter marker + span selection, status bar shows the error with a <span class="mono">[ jump ]</span> link.</li>
+      <li>Output side effects: Copy uses <span class="mono">navigator.clipboard</span>; Download builds a Blob.</li>
+    </ol>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Result envelope</h3>
+<pre><span class="c">// lib/json/types.ts</span>
+<span class="a">type</span> JsonError = {
+  line: <span class="k">number</span>; column: <span class="k">number</span>;
+  offsetStart: <span class="k">number</span>; offsetEnd: <span class="k">number</span>;
+  message: <span class="k">string</span>; hint?: <span class="k">string</span>;
+};
+
+<span class="a">type</span> Stats = {
+  bytes: <span class="k">number</span>;     <span class="c">// TextEncoder length of input</span>
+  keys: <span class="k">number</span>;      <span class="c">// total unique key occurrences</span>
+  depth: <span class="k">number</span>;     <span class="c">// max nesting (object + array)</span>
+};
+
+<span class="a">type</span> Result =
+  | { ok: <span class="b">true</span>;  output: <span class="k">string</span>; stats: Stats }
+  | { ok: <span class="b">false</span>; error: JsonError; stats: <span class="b">null</span> };</pre>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Tool implementations</h3>
+    <table class="w-full mb-3">
+      <tr><th>Function</th><th>Behavior</th></tr>
+      <tr><td class="mono">parse(input)</td><td>Wraps <span class="mono">JSON.parse</span>. On SyntaxError, returns a normalized <span class="mono">JsonError</span> via <span class="mono">lib/json/errors.ts</span>.</td></tr>
+      <tr><td class="mono">beautify(input, { indent, sortKeys })</td><td>Parse + <span class="mono">JSON.stringify</span> with indent. If <span class="mono">sortKeys</span>, walks the tree and rebuilds with sorted object keys (arrays untouched).</td></tr>
+      <tr><td class="mono">minify(input)</td><td>Parse + <span class="mono">JSON.stringify</span> with no indent.</td></tr>
+      <tr><td class="mono">validate(input)</td><td>Parse only; on success, walks the tree once to compute stats.</td></tr>
+      <tr><td class="mono">buildTree(input)</td><td>For /parse. Returns a tree of nodes carrying <span class="mono">type</span>, <span class="mono">key</span>, raw value (leaves), and <span class="mono">path</span> string for copy.</td></tr>
+    </table>
+    <p class="mb-3">All tools call <span class="mono">parse</span> first; that's the shared canonical entry point.</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">URL ↔ state binding</h3>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li><strong>Path</strong> determines which tool.</li>
+      <li><strong>Query params</strong> carry tool options (<span class="mono">?indent=tab&amp;sort=1</span>). Option changes call <span class="mono">history.replaceState</span>; tab switches call <span class="mono">history.pushState</span>.</li>
+      <li><strong>Hash is never used</strong> — input content stays in localStorage only.</li>
+    </ul>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">localStorage shape</h3>
+<pre><span class="c">// key: 'jsontools:v1'</span>
+{
+  <span class="k">"schemaVersion"</span>: <span class="a">1</span>,
+  <span class="k">"input"</span>: <span class="s">"{ ... }"</span>,
+  <span class="k">"tool"</span>: <span class="s">"beautify"</span>,
+  <span class="k">"options"</span>: { <span class="k">"indent"</span>: <span class="a">2</span>, <span class="k">"sortKeys"</span>: <span class="b">false</span> },
+  <span class="k">"theme"</span>: <span class="s">"auto"</span>
+}</pre>
+    <p class="mb-3">On read, validate the shape against a Zod-like check; on mismatch, discard. The <span class="mono">schemaVersion</span> lets us evolve the format without trapping users on a broken state.</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Performance budget</h3>
+    <table class="w-full mb-3">
+      <tr><th>Slice</th><th>Target (gz)</th></tr>
+      <tr><td>Astro framework runtime</td><td>0 KB</td></tr>
+      <tr><td>Preact + signals (if used)</td><td>~5 KB</td></tr>
+      <tr><td>CodeMirror 6 + JSON pack</td><td>~80 KB</td></tr>
+      <tr><td>App code</td><td>~20 KB</td></tr>
+      <tr><td>JetBrains Mono subset (woff2)</td><td>~25 KB</td></tr>
+      <tr><td><strong>Critical path total</strong></td><td><strong>~130 KB</strong></td></tr>
+    </table>
+    <p>Operation latency target at 5 MB: under 250 ms on mid-tier hardware (V8 parses ~50 MB/s, stringify ~30 MB/s).</p>
+  </section>
+
+  <!-- ============== ERRORS ============== -->
+  <section id="errors" class="mb-12 section-divider pt-10">
+    <h2 class="text-2xl font-semibold mb-3">6 · Error handling &amp; edge cases</h2>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Parse error normalization</h3>
+    <p class="mb-3">V8 / JavaScriptCore / SpiderMonkey each format <span class="mono">SyntaxError.message</span> differently. <span class="mono">lib/json/errors.ts</span> exposes <span class="mono">normalizeJsonError(input, err)</span>:</p>
+    <ol class="list-decimal pl-6 space-y-1 mb-3">
+      <li>Try each engine's regex (V8: <span class="mono">at position N</span>; JSC: <span class="mono">at line N column M</span>; SpiderMonkey: <span class="mono">at line N column M</span>).</li>
+      <li>If engine output is opaque, fall back to a tiny in-house JSON tokenizer that locates the first invalid token.</li>
+      <li>Return <span class="mono">{ line, column, offsetStart, offsetEnd, message, hint? }</span>.</li>
+    </ol>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Hint catalogue</h3>
+    <table class="w-full mb-3">
+      <tr><th>Native message contains…</th><th>Plain-English hint</th></tr>
+      <tr><td class="mono">Unexpected token '</td><td>Single quotes aren't valid JSON — use double quotes</td></tr>
+      <tr><td class="mono">Unexpected token }</td><td>Trailing comma before <span class="mono">}</span></td></tr>
+      <tr><td class="mono">Unexpected token ]</td><td>Trailing comma before <span class="mono">]</span></td></tr>
+      <tr><td class="mono">Unexpected end of</td><td>Input ends mid-value — missing <span class="mono">}</span>, <span class="mono">]</span>, or <span class="mono">"</span></td></tr>
+      <tr><td class="mono">Unexpected token (identifier-shaped)</td><td>Keys must be quoted strings</td></tr>
+    </table>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Error presentation</h3>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li><strong>Editor:</strong> red gutter marker on the error line; offending span gets a subtle red underline via CodeMirror decoration. Clicking the gutter marker scrolls to the line.</li>
+      <li><strong>Status bar:</strong> <span class="mono">› parse failed at 4:12 — trailing comma before }</span> in red, with a <span class="mono">[ jump ]</span> link that scrolls and selects the span.</li>
+      <li><strong>Right pane:</strong> muted placeholder <span class="mono">— no output —</span> with the error echoed below. We don't blank it.</li>
+    </ul>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Edge case behaviors</h3>
+    <table class="w-full mb-3">
+      <tr><th>Case</th><th>Behavior</th></tr>
+      <tr><td>Empty or whitespace-only input</td><td>Action runs; muted <span class="mono">› empty input</span>. Not an error.</td></tr>
+      <tr><td>Valid scalar JSON (<span class="mono">null</span>, <span class="mono">true</span>, number, string)</td><td>All valid. Stats: <span class="mono">keys: 0</span>, <span class="mono">depth: 0</span>. Tree shows a single leaf.</td></tr>
+      <tr><td>Input &gt; 5 MB</td><td>Non-blocking warning above editor.</td></tr>
+      <tr><td>Input &gt; 50 MB</td><td>Hard confirm before running.</td></tr>
+      <tr><td>Non-text file upload</td><td>Sniff for null bytes / UTF-16 BOM upfront; reject with friendly message.</td></tr>
+      <tr><td>File upload &gt; 50 MB</td><td>Reject before reading.</td></tr>
+      <tr><td>Multiple files dropped</td><td>Use first; notice naming the file used.</td></tr>
+      <tr><td>Non-file drag (image, URL)</td><td>Ignored silently.</td></tr>
+      <tr><td>Sort keys on an array</td><td>Arrays positional — unchanged. Documented in option tooltip.</td></tr>
+      <tr><td>Duplicate keys</td><td>Native parse keeps the last; surface a one-time muted notice <span class="mono">Duplicate key 'foo' — kept last value</span>.</td></tr>
+      <tr><td>Very deep nesting (&gt; 1000)</td><td>Catch <span class="mono">Maximum call stack</span>; report <span class="mono">Input too deeply nested</span>.</td></tr>
+      <tr><td>Numeric precision loss</td><td>Opt-in detector flags as muted notice; off by default.</td></tr>
+      <tr><td>Clipboard write blocked</td><td>Toast: <span class="mono">Couldn't copy — your browser blocked clipboard access</span>.</td></tr>
+      <tr><td>LocalStorage quota / Safari private</td><td>Silent first time; on operation, set session flag to skip persistence and show one-time toast.</td></tr>
+    </table>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Deliberate non-features</h3>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li>No auto-format on type — beautify is one click.</li>
+      <li>No auto-validate while typing — CodeMirror's linter shows obvious gutter errors; explicit validate produces full stats.</li>
+      <li>No recovery of corrupted localStorage state — discard the whole entry.</li>
+    </ul>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Accessibility</h3>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li>Tabs are real <span class="mono">&lt;a&gt;</span> links, keyboard-navigable.</li>
+      <li>Action button has an explicit <span class="mono">aria-label</span> matching the current tool.</li>
+      <li>Status messages live in an <span class="mono">aria-live="polite"</span> region.</li>
+      <li>Color is never the only signal: <span class="mono">›</span> for status, "failed"/"valid" wording, focus rings on toggles.</li>
+      <li>Mono font at 14 px / 1.5 line-height; amber-on-charcoal and amber-on-paper both ≥ 4.5:1.</li>
+    </ul>
+  </section>
+
+  <!-- ============== TESTING ============== -->
+  <section id="testing" class="mb-12 section-divider pt-10">
+    <h2 class="text-2xl font-semibold mb-3">7 · Testing</h2>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Unit (Vitest)</h3>
+    <table class="w-full mb-3">
+      <tr><th>Suite</th><th>Representative cases</th></tr>
+      <tr><td class="mono">parse.test.ts</td><td>valid types · trailing comma · single-quoted · unquoted keys · unterminated string · empty · whitespace · BOM · deep nesting</td></tr>
+      <tr><td class="mono">beautify.test.ts</td><td>indent 2/4/tab parity with <span class="mono">JSON.stringify</span> · <span class="mono">sortKeys</span> orders objects but preserves array order · nested sort · scalars round-trip</td></tr>
+      <tr><td class="mono">minify.test.ts</td><td>strips whitespace · preserves escapes · round-trips · scalar inputs</td></tr>
+      <tr><td class="mono">validate.test.ts</td><td>stats: key count counts unique paths · depth counts max nesting · byte length matches TextEncoder · duplicate-key notice fires once</td></tr>
+      <tr><td class="mono">errors.test.ts</td><td>each engine's error format normalizes · each hint catalog entry matches its trigger · fallback tokenizer locates first invalid token</td></tr>
+      <tr><td class="mono">tree.test.ts</td><td><span class="mono">buildTree</span> path strings · type tagging · empty container has no leaves</td></tr>
+      <tr><td class="mono">storage.test.ts</td><td>schemaVersion mismatch discards · quota error doesn't throw · invalid JSON discarded · round-trip of canonical shape</td></tr>
+    </table>
+    <p class="mb-3">Target: <strong>&gt; 95% line coverage on <span class="mono">lib/json/</span></strong>.</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Component (Vitest + @testing-library/preact)</h3>
+    <table class="w-full mb-3">
+      <tr><th>Suite</th><th>Cases</th></tr>
+      <tr><td class="mono">Workspace.test.tsx</td><td>typing updates input · action runs tool · keyboard shortcut runs · error propagates to status bar · switching tools preserves input · options update URL · localStorage persists on debounce</td></tr>
+      <tr><td class="mono">TreeExplorer.test.tsx</td><td>renders nested object · expand/collapse · search highlights + expands ancestors · path copy for nested arrays · &gt; 1k rows virtualize</td></tr>
+      <tr><td class="mono">ToolOptions.test.tsx</td><td>indent control updates URL · sort-keys checkbox updates URL · options don't bleed between tools</td></tr>
+    </table>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">E2E (Playwright)</h3>
+    <table class="w-full mb-3">
+      <tr><th>Spec</th><th>Scenario</th></tr>
+      <tr><td class="mono">landing.spec.ts</td><td><span class="mono">/</span> redirects to <span class="mono">/beautify</span>; sample JSON visible; action button labeled correctly</td></tr>
+      <tr><td class="mono">beautify-flow.spec.ts</td><td>paste minified → click Beautify → indented output; toggle sort keys → re-runs; segmented indent updates URL</td></tr>
+      <tr><td class="mono">minify-flow.spec.ts</td><td>paste pretty → click Minify → single-line; copy button writes to clipboard</td></tr>
+      <tr><td class="mono">validate-flow.spec.ts</td><td>valid input → <span class="mono">› valid · …</span>; broken input → error message; <span class="mono">[ jump ]</span> selects the offending span</td></tr>
+      <tr><td class="mono">parse-flow.spec.ts</td><td>nested input → tree renders; expand/collapse; search; copy-path returns expected dotted/bracketed path</td></tr>
+      <tr><td class="mono">routing.spec.ts</td><td>each tab navigates; reload preserves tool; back button restores prior tool; <span class="mono">?indent=tab</span> applies on direct load</td></tr>
+      <tr><td class="mono">persistence.spec.ts</td><td>content survives reload; Clear empties; quota-stubbed run still works + toast shown once</td></tr>
+      <tr><td class="mono">file-input.spec.ts</td><td>.json upload populates input; drag-drop same; multiple drop → first + notice; non-text drop → rejected</td></tr>
+      <tr><td class="mono">theme.spec.ts</td><td>system preference applied; cycle button rotates auto → light → dark; choice persists across reload</td></tr>
+      <tr><td class="mono">keyboard.spec.ts</td><td>⌘+Enter runs · ⌘+L clears · sensible tab order</td></tr>
+      <tr><td class="mono">mobile.spec.ts</td><td>375 × 667 → panes stack; tab strip scrolls; action is horizontal</td></tr>
+      <tr><td class="mono">large-payload.spec.ts</td><td>6 MB fixture → warning visible, beautify finishes; 60 MB → rejected</td></tr>
+      <tr><td class="mono">a11y.spec.ts</td><td><span class="mono">@axe-core/playwright</span> on each route in both themes; fail on serious violations</td></tr>
+    </table>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">CI (GitHub Actions, on PR)</h3>
+<pre><span class="a">- run:</span> bun install --frozen-lockfile
+<span class="a">- run:</span> bun run typecheck   <span class="c"># tsc --noEmit + astro check</span>
+<span class="a">- run:</span> bun run lint        <span class="c"># Biome</span>
+<span class="a">- run:</span> bun run test        <span class="c"># Vitest: unit + component</span>
+<span class="a">- run:</span> bun run build
+<span class="a">- run:</span> bun run test:e2e    <span class="c"># Playwright against preview build (Chromium + WebKit)</span></pre>
+    <p class="mb-3">Cloudflare Pages provides preview deploys per PR for visual review.</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-6">Manual QA checklist (pre-launch)</h3>
+    <ol class="list-decimal pl-6 space-y-1 mb-3">
+      <li>Cold load on Safari iOS, paste 1 MB JSON, beautify → no jank.</li>
+      <li>Drag-drop a 4 MB file in Firefox → output renders without freezing.</li>
+      <li>Eight broken-JSON snippets → each shows the expected hint.</li>
+      <li>Toggle theme three times rapidly → no flash.</li>
+      <li>Full beautify cycle using only keyboard → no mouse needed.</li>
+      <li>320-px viewport → layout usable, no overflow.</li>
+      <li>Private mode (no localStorage) → site still works.</li>
+      <li>Screen reader on validate → success and failure both announce.</li>
+      <li>Hard-reload twice with devtools open → CSS/JS cached, HTML fresh.</li>
+      <li>Lighthouse on <span class="mono">/beautify</span> → ≥ 95 across all categories.</li>
+      <li>Critical JS &lt; 150 KB gz (verified via build report).</li>
+      <li>CF Web Analytics shows the visit; privacy footer copy still accurate.</li>
+    </ol>
+  </section>
+
+  <!-- ============== OUT OF SCOPE ============== -->
+  <section id="out-of-scope" class="mb-12 section-divider pt-10">
+    <h2 class="text-2xl font-semibold mb-3">8 · Out of scope (v1)</h2>
+    <ul class="list-disc pl-6 space-y-1 mb-3">
+      <li>JSON5 / JSONC lenient parsing.</li>
+      <li>JSON Schema validation.</li>
+      <li>Web Worker / streaming parser for &gt; 50 MB payloads.</li>
+      <li>Share-via-URL or short-link sharing.</li>
+      <li>JSON ↔ YAML / CSV / TOML conversion.</li>
+      <li>Diff view between two JSON documents.</li>
+      <li>Auth, user accounts, saved snippets.</li>
+    </ul>
+    <div class="callout text-sm">Each of these has its own reasoning in the brainstorm transcript. Revisit if real usage signals demand.</div>
+  </section>
+
+  <!-- ============== OPEN ============== -->
+  <section id="open" class="mb-12 section-divider pt-10">
+    <h2 class="text-2xl font-semibold mb-3">9 · Open follow-ups for the implementation plan</h2>
+    <ol class="list-decimal pl-6 space-y-2 mb-3">
+      <li>Confirm Biome over ESLint+Prettier (assumed for speed + Bun affinity).</li>
+      <li>Decide on Astro View Transitions for tab swap vs hard navigation (assumed: View Transitions).</li>
+      <li>Choose the exact subset of JetBrains Mono characters to embed (assumed: Latin + symbols, ~25 KB).</li>
+      <li>Pick GitHub repo name + initial license (assumed: <span class="mono">json-tools</span>, MIT).</li>
+      <li>OG image / favicon design — punt to plan as a small follow-up task.</li>
+    </ol>
+  </section>
+
+  <footer class="meta-row text-xs mt-16 pt-6 section-divider">
+    <p>Spec authored 2026-05-13 · brainstorm transcript available in conversation history · next step: <span class="accent">writing-plans</span> to produce the implementation plan.</p>
+  </footer>
+
+</body>
+</html>
