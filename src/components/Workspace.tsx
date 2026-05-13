@@ -6,6 +6,7 @@ import { makeEditor } from '@/lib/editor';
 import type { EditorView } from '@codemirror/view';
 import StatusBar from './StatusBar';
 import ToolOptions from './ToolOptions';
+import { readFiles } from '@/lib/fileInput';
 
 type Props = { tool: Tool };
 
@@ -20,6 +21,7 @@ export default function Workspace({ tool }: Props) {
   const inputView = useRef<EditorView | null>(null);
   const outputHost = useRef<HTMLDivElement>(null);
   const outputView = useRef<EditorView | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const u = new URL(window.location.href);
@@ -68,6 +70,21 @@ export default function Workspace({ tool }: Props) {
     }
   }
 
+  const setInputFromFile = async (files: FileList | File[]) => {
+    const r = await readFiles(files);
+    if (!r.ok) { setStatus(r.reason); return; }
+    setInput(r.content);
+    inputView.current?.dispatch({
+      changes: { from: 0, to: inputView.current.state.doc.length, insert: r.content }
+    });
+    setStatus(r.extraFiles > 0 ? `Multiple files dropped — using ${r.name}` : `loaded ${r.name}`);
+  };
+
+  const onFileChange = (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    if (input.files) setInputFromFile(input.files);
+  };
+
   const updateOpts = (o: BeautifyOptions) => {
     setOpts(o);
     const u = new URL(window.location.href);
@@ -109,7 +126,15 @@ export default function Workspace({ tool }: Props) {
 
   return (
     <div class="grid grid-cols-1 md:grid-cols-[1fr_56px_1fr] gap-0 border border-[var(--border)] rounded-md overflow-hidden">
-      <div ref={inputHost} class="min-h-[60vh] bg-[var(--editor)]" />
+      <div
+        ref={inputHost}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (e.dataTransfer?.files?.length) setInputFromFile(e.dataTransfer.files);
+        }}
+        onDragOver={(e) => e.preventDefault()}
+        class="min-h-[60vh] bg-[var(--editor)]"
+      />
       <div class="flex items-center justify-center bg-[var(--paper)] border-x border-[var(--border)]">
         <button
           onClick={run}
@@ -120,7 +145,22 @@ export default function Workspace({ tool }: Props) {
       <div ref={outputHost} class="min-h-[60vh]" />
       <div class="col-span-full">
         <div class="flex items-center justify-between px-3 py-1.5 border-t" style="border-color: var(--border)">
-          <ToolOptions tool={tool} opts={opts} onChange={updateOpts} />
+          <div class="flex items-center gap-3">
+            <input
+              type="file"
+              accept=".json,.txt,application/json,text/plain"
+              ref={fileRef}
+              class="hidden"
+              onChange={onFileChange}
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              class="text-xs text-[var(--muted)] hover:text-[var(--amber)]"
+            >
+              upload file
+            </button>
+            <ToolOptions tool={tool} opts={opts} onChange={updateOpts} />
+          </div>
         </div>
         <StatusBar tool={tool} status={status} error={error} onJump={jumpToError} />
       </div>
