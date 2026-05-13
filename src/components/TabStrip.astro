@@ -1,0 +1,18 @@
+---
+type Props = { active: 'beautify' | 'minify' | 'validate' | 'parse' };
+const { active } = Astro.props as Props;
+const tabs = ['beautify', 'minify', 'validate', 'parse'] as const;
+---
+<nav class="flex gap-0 px-3 border-b" style="border-color: var(--border)" aria-label="Tools">
+  {tabs.map((t) => (
+    <a
+      href={`/${t}`}
+      class={`px-3 py-2 text-sm -mb-px border-b ${
+        active === t
+          ? 'text-[var(--amber)] border-[var(--amber)]'
+          : 'text-[var(--muted)] border-transparent hover:text-[var(--ink)]'
+      }`}
+      aria-current={active === t ? 'page' : undefined}
+    >{t}</a>
+  ))}
+</nav>
