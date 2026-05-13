@@ -1,1 +1,57 @@
 @import "tailwindcss";
+
+/* CSS variables — single source of truth, toggled by [data-theme] */
+:root, [data-theme="light"] {
+  --paper: #fbf8f1;
+  --editor: #fffefb;
+  --ink: #1f1a14;
+  --muted: #8a8275;
+  --border: #e9e2d2;
+  --amber: #b8801a;
+  --amber-soft: #f5b647;
+  --key: #3f7e5d;
+  --str: #8a5b12;
+  --bool: #6b3d8a;
+  --error: #b04141;
+}
+
+[data-theme="dark"] {
+  --paper: #0d0f12;
+  --editor: #15181c;
+  --ink: #d8d8c2;
+  --muted: #6c7480;
+  --border: #1f242a;
+  --amber: #f5b647;
+  --amber-soft: #f5b647;
+  --key: #7fc8a9;
+  --str: #e5b870;
+  --bool: #c594e3;
+  --error: #ff6b6b;
+}
+
+/* Auto follows system unless [data-theme] is set */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --paper: #0d0f12; --editor: #15181c; --ink: #d8d8c2; --muted: #6c7480;
+    --border: #1f242a; --amber: #f5b647; --amber-soft: #f5b647;
+    --key: #7fc8a9; --str: #e5b870; --bool: #c594e3; --error: #ff6b6b;
+  }
+}
+
+@theme {
+  --color-paper:  var(--paper);
+  --color-editor: var(--editor);
+  --color-ink:    var(--ink);
+  --color-muted:  var(--muted);
+  --color-amber:  var(--amber);
+  --color-border-paper: var(--border);
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+html, body { background: var(--paper); color: var(--ink); font-family: var(--font-mono); }
+* { border-color: var(--border); }
+::selection { background: color-mix(in srgb, var(--amber) 30%, transparent); }
+
+.blink { animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .blink { animation: none; } }
