@@ -142,6 +142,28 @@ export default function Workspace({ tool }: Props) {
     URL.revokeObjectURL(a.href);
   };
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        run();
+      } else if (e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        setInput('');
+        setOutput('');
+        setError(null);
+        setStatus('cleared');
+        inputView.current?.dispatch({
+          changes: { from: 0, to: inputView.current.state.doc.length, insert: '' }
+        });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [run]);
+
   return (
     <div class="grid grid-cols-1 md:grid-cols-[1fr_56px_1fr] gap-0 border border-[var(--border)] rounded-md overflow-hidden">
       <div
