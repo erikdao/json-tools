@@ -3,7 +3,7 @@ import '../styles/global.css';
 type Props = { title?: string; description?: string; canonical?: string };
 const {
   title = 'jsontools — beautify, minify, validate, parse JSON',
-  description = 'A fast, beautiful, client-only JSON workspace. No tracking, no accounts.',
+  description = 'A fast, beautiful, client-only JSON workspace.',
   canonical,
 } = Astro.props as Props;
 const url = canonical ?? new URL(Astro.url.pathname, 'https://jsontools.erikdao.com').href;
