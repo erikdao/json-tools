@@ -258,28 +258,30 @@ export default function Workspace({ tool }: Props) {
           {tool === 'parse'
             ? <div class="flex-1 min-h-0 bg-[var(--editor)] overflow-auto">{tree && <TreeExplorer tree={tree} />}</div>
             : <div ref={outputHost} class="flex-1 min-h-0 overflow-hidden" />}
-          <div class="flex gap-3 text-xs px-3 py-1.5 border-t" style="border-color: var(--border)">
-            <button
-              onClick={copy}
-              disabled={!output}
-              aria-label="Copy output"
-              class="text-[var(--muted)] hover:text-[var(--amber)] disabled:opacity-40"
-            >
-              copy
-            </button>
-            <button
-              onClick={download}
-              disabled={!output}
-              aria-label="Download output"
-              class="text-[var(--muted)] hover:text-[var(--amber)] disabled:opacity-40"
-            >
-              download
-            </button>
+          <div class="flex gap-2 text-xs px-3 py-1.5 border-t" style="border-color: var(--border)">
+            <div class="flex border border-[var(--border)] rounded">
+              <button
+                onClick={copy}
+                disabled={!output}
+                aria-label="Copy output"
+                class="px-2 py-0.5 text-[var(--muted)] hover:text-[var(--amber)] disabled:opacity-40"
+              >
+                copy
+              </button>
+              <button
+                onClick={download}
+                disabled={!output}
+                aria-label="Download output"
+                class="px-2 py-0.5 border-l border-[var(--border)] text-[var(--muted)] hover:text-[var(--amber)] disabled:opacity-40"
+              >
+                download
+              </button>
+            </div>
           </div>
         </div>
       </div>
       <div class="flex items-center justify-between px-3 py-1.5 border-t" style="border-color: var(--border)">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-4">
           <input
             type="file"
             accept=".json,.txt,application/json,text/plain"
@@ -287,22 +289,27 @@ export default function Workspace({ tool }: Props) {
             class="hidden"
             onChange={onFileChange}
           />
-          <button
-            onClick={() => fileRef.current?.click()}
-            aria-label="Upload JSON file"
-            class="text-xs text-[var(--muted)] hover:text-[var(--amber)]"
-          >
-            upload file
-          </button>
-          <button onClick={() => {
-            clearState();
-            setInput(''); setOutput(''); setError(null);
-            inputView.current?.dispatch({
-              changes: { from: 0, to: inputView.current.state.doc.length, insert: '' }
-            });
-          }}
-            aria-label="Clear input"
-            class="text-xs text-[var(--muted)] hover:text-[var(--amber)]">clear</button>
+          <div class="flex border border-[var(--border)] rounded text-xs">
+            <button
+              onClick={() => fileRef.current?.click()}
+              aria-label="Upload JSON file"
+              class="px-2 py-0.5 text-[var(--muted)] hover:text-[var(--amber)]"
+            >
+              upload file
+            </button>
+            <button onClick={() => {
+              clearState();
+              setInput(''); setOutput(''); setError(null);
+              inputView.current?.dispatch({
+                changes: { from: 0, to: inputView.current.state.doc.length, insert: '' }
+              });
+            }}
+              aria-label="Clear input"
+              class="px-2 py-0.5 border-l border-[var(--border)] text-[var(--muted)] hover:text-[var(--amber)]"
+            >
+              clear
+            </button>
+          </div>
           <ToolOptions tool={tool} opts={opts} onChange={updateOpts} />
         </div>
       </div>
