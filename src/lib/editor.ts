@@ -8,7 +8,8 @@ import { history, defaultKeymap, historyKeymap } from '@codemirror/commands';
 import { bracketMatching, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 
 export const theme = EditorView.theme({
-  '&': { backgroundColor: 'var(--editor)', color: 'var(--ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: '14px' },
+  '&': { backgroundColor: 'var(--editor)', color: 'var(--ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: '14px', height: '100%' },
+  '.cm-scroller': { overflow: 'auto' },
   '.cm-gutters': { backgroundColor: 'var(--editor)', color: 'var(--muted)', border: 'none' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
   '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--amber)' },

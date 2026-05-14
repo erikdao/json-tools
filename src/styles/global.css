@@ -52,6 +52,9 @@ html, body { background: var(--paper); color: var(--ink); font-family: var(--fon
 * { border-color: var(--border); }
 ::selection { background: color-mix(in srgb, var(--amber) 30%, transparent); }
 
+/* Let Astro islands participate in their parent's flex/grid layout */
+astro-island { display: contents; }
+
 .blink { animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .blink { animation: none; } }
