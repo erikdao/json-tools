@@ -3,7 +3,7 @@ import { EditorState } from '@codemirror/state';
 // biome-ignore lint/correctness/noUnusedImports: planned for later tasks
 import { Compartment } from '@codemirror/state';
 import { json, jsonParseLinter } from '@codemirror/lang-json';
-import { linter, lintGutter } from '@codemirror/lint';
+import { type Diagnostic, linter, lintGutter } from '@codemirror/lint';
 import { history, defaultKeymap, historyKeymap } from '@codemirror/commands';
 import { bracketMatching, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 
@@ -27,7 +27,9 @@ export function makeEditor(parent: HTMLElement, opts: { value: string; readOnly?
         EditorView.lineWrapping,
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         json(),
-        linter(jsonParseLinter()),
+        linter((view): Diagnostic[] =>
+          view.state.doc.toString().trim() === '' ? [] : jsonParseLinter()(view),
+        ),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         theme,
         EditorView.editable.of(!opts.readOnly),
