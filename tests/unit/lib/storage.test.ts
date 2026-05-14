@@ -1,13 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { loadState, saveState, clearState, type Persisted } from '@/lib/storage';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { clearState, loadState, type Persisted, saveState } from '@/lib/storage';
 
 beforeEach(() => localStorage.clear());
 
 describe('storage', () => {
   it('round-trips canonical shape', () => {
     const state: Persisted = {
-      schemaVersion: 1, input: '{"a":1}', tool: 'beautify',
-      options: { indent: 2, sortKeys: false }, theme: 'auto',
+      schemaVersion: 1,
+      input: '{"a":1}',
+      tool: 'beautify',
+      options: { indent: 2, sortKeys: false },
+      theme: 'auto',
     };
     saveState(state);
     expect(loadState()).toEqual(state);
@@ -24,17 +27,31 @@ describe('storage', () => {
   });
 
   it('clearState removes the entry', () => {
-    saveState({ schemaVersion: 1, input: '', tool: 'beautify',
-      options: { indent: 2, sortKeys: false }, theme: 'auto' });
+    saveState({
+      schemaVersion: 1,
+      input: '',
+      tool: 'beautify',
+      options: { indent: 2, sortKeys: false },
+      theme: 'auto',
+    });
     clearState();
     expect(loadState()).toBeNull();
   });
 
   it('saveState swallows quota errors', () => {
     const orig = Storage.prototype.setItem;
-    Storage.prototype.setItem = () => { throw new Error('QuotaExceededError'); };
-    expect(() => saveState({ schemaVersion: 1, input: '', tool: 'beautify',
-      options: { indent: 2, sortKeys: false }, theme: 'auto' })).not.toThrow();
+    Storage.prototype.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    expect(() =>
+      saveState({
+        schemaVersion: 1,
+        input: '',
+        tool: 'beautify',
+        options: { indent: 2, sortKeys: false },
+        theme: 'auto',
+      }),
+    ).not.toThrow();
     Storage.prototype.setItem = orig;
   });
 });

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { setEditorValue } from './helpers';
 
 test('validate reports stats on valid JSON', async ({ page }) => {

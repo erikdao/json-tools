@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { validate } from '@/lib/json/validate';
 
 describe('validate', () => {
@@ -6,8 +6,8 @@ describe('validate', () => {
     const r = validate('{"a":{"b":{"c":1}},"d":[1,2,3]}');
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.stats.keys).toBe(4);    // a, b, c, d
-      expect(r.stats.depth).toBe(3);   // {a:{b:{c:.}}}
+      expect(r.stats.keys).toBe(4); // a, b, c, d
+      expect(r.stats.depth).toBe(3); // {a:{b:{c:.}}}
       expect(r.stats.bytes).toBeGreaterThan(0);
     }
   });

@@ -14,15 +14,21 @@ export default function ToolOptions({ tool, opts, onChange }: Props) {
       <div class="flex border border-[var(--border)] rounded">
         {indents.map((i) => (
           <button
+            type="button"
             onClick={() => onChange({ ...opts, indent: i })}
             class={`px-2 py-0.5 ${opts.indent === i ? 'text-[var(--amber)]' : 'text-[var(--muted)]'}`}
             aria-pressed={opts.indent === i}
-          >{i === '\t' ? 'tab' : i}</button>
+          >
+            {i === '\t' ? 'tab' : i}
+          </button>
         ))}
       </div>
       <label class="flex items-center gap-1.5 cursor-pointer">
-        <input type="checkbox" checked={opts.sortKeys}
-          onChange={(e) => onChange({ ...opts, sortKeys: (e.target as HTMLInputElement).checked })} />
+        <input
+          type="checkbox"
+          checked={opts.sortKeys}
+          onChange={(e) => onChange({ ...opts, sortKeys: (e.target as HTMLInputElement).checked })}
+        />
         <span>sort keys</span>
       </label>
     </div>

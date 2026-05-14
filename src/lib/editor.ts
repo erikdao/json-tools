@@ -1,29 +1,50 @@
-import { EditorView, lineNumbers, highlightActiveLine, keymap, drawSelection } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
-// biome-ignore lint/correctness/noUnusedImports: planned for later tasks
-import { Compartment } from '@codemirror/state';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { json, jsonParseLinter } from '@codemirror/lang-json';
+import { bracketMatching, defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { type Diagnostic, linter, lintGutter } from '@codemirror/lint';
-import { history, defaultKeymap, historyKeymap } from '@codemirror/commands';
-import { bracketMatching, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+// biome-ignore lint/correctness/noUnusedImports: planned for later tasks
+import { Compartment, EditorState } from '@codemirror/state';
+import {
+  drawSelection,
+  EditorView,
+  highlightActiveLine,
+  keymap,
+  lineNumbers,
+} from '@codemirror/view';
 
 export const theme = EditorView.theme({
-  '&': { backgroundColor: 'var(--editor)', color: 'var(--ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: '14px', height: '100%' },
+  '&': {
+    backgroundColor: 'var(--editor)',
+    color: 'var(--ink)',
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: '14px',
+    height: '100%',
+  },
   '.cm-scroller': { overflow: 'auto' },
   '.cm-gutters': { backgroundColor: 'var(--editor)', color: 'var(--muted)', border: 'none' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
   '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--amber)' },
   '.cm-cursor': { borderLeftColor: 'var(--amber)', borderLeftWidth: '2px' },
-  '.cm-selectionBackground, ::selection': { backgroundColor: 'color-mix(in srgb, var(--amber) 25%, transparent)' },
+  '.cm-selectionBackground, ::selection': {
+    backgroundColor: 'color-mix(in srgb, var(--amber) 25%, transparent)',
+  },
 });
 
-export function makeEditor(parent: HTMLElement, opts: { value: string; readOnly?: boolean; ariaLabel?: string; onChange?: (v: string) => void }) {
+export function makeEditor(
+  parent: HTMLElement,
+  opts: { value: string; readOnly?: boolean; ariaLabel?: string; onChange?: (v: string) => void },
+) {
   const view = new EditorView({
     parent,
     state: EditorState.create({
       doc: opts.value,
       extensions: [
-        lineNumbers(), lintGutter(), history(), bracketMatching(), drawSelection(), highlightActiveLine(),
+        lineNumbers(),
+        lintGutter(),
+        history(),
+        bracketMatching(),
+        drawSelection(),
+        highlightActiveLine(),
         EditorView.lineWrapping,
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         json(),
@@ -34,7 +55,9 @@ export function makeEditor(parent: HTMLElement, opts: { value: string; readOnly?
         theme,
         EditorView.editable.of(!opts.readOnly),
         EditorState.readOnly.of(!!opts.readOnly),
-        EditorView.contentAttributes.of({ 'aria-label': opts.ariaLabel ?? (opts.readOnly ? 'Output JSON' : 'Input JSON') }),
+        EditorView.contentAttributes.of({
+          'aria-label': opts.ariaLabel ?? (opts.readOnly ? 'Output JSON' : 'Input JSON'),
+        }),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && opts.onChange) opts.onChange(u.state.doc.toString());
         }),

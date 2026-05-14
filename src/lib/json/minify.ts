@@ -1,11 +1,14 @@
-import type { Result } from './types';
-import { parseRaw } from './parse';
 import { normalizeJsonError } from './errors';
+import { parseRaw } from './parse';
+import type { Result } from './types';
 
 export function minify(src: string): Result {
   if (src.trim() === '') {
-    return { ok: false, stats: null,
-      error: { line: 1, column: 1, offsetStart: 0, offsetEnd: 0, message: 'empty input' } };
+    return {
+      ok: false,
+      stats: null,
+      error: { line: 1, column: 1, offsetStart: 0, offsetEnd: 0, message: 'empty input' },
+    };
   }
   try {
     const output = JSON.stringify(parseRaw(src));

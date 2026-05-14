@@ -1,10 +1,11 @@
-import type { Result, Stats } from './types';
-import { parseRaw } from './parse';
 import { normalizeJsonError } from './errors';
+import { parseRaw } from './parse';
+import type { Result, Stats } from './types';
 
 function walk(v: unknown): { keys: number; depth: number } {
   if (Array.isArray(v)) {
-    let keys = 0, depth = 1;
+    let keys = 0,
+      depth = 1;
     for (const item of v) {
       const w = walk(item);
       keys += w.keys;
@@ -14,7 +15,8 @@ function walk(v: unknown): { keys: number; depth: number } {
   }
   if (v && typeof v === 'object') {
     const entries = Object.entries(v as Record<string, unknown>);
-    let keys = entries.length, depth = 1;
+    let keys = entries.length,
+      depth = 1;
     for (const [, val] of entries) {
       const w = walk(val);
       keys += w.keys;
@@ -32,8 +34,16 @@ function firstDuplicateKey(src: string): string | null {
   let i = 0;
   while (i < src.length) {
     const ch = src[i];
-    if (ch === '{') { stack.push(new Map()); i++; continue; }
-    if (ch === '}') { stack.pop(); i++; continue; }
+    if (ch === '{') {
+      stack.push(new Map());
+      i++;
+      continue;
+    }
+    if (ch === '}') {
+      stack.pop();
+      i++;
+      continue;
+    }
     if (ch === '"' && stack.length > 0) {
       let j = i + 1;
       while (j < src.length && src[j] !== '"') j += src[j] === '\\' ? 2 : 1;
@@ -55,13 +65,20 @@ function firstDuplicateKey(src: string): string | null {
 
 export function validate(src: string): Result {
   if (src.trim() === '') {
-    return { ok: false, stats: null,
-      error: { line: 1, column: 1, offsetStart: 0, offsetEnd: 0, message: 'empty input' } };
+    return {
+      ok: false,
+      stats: null,
+      error: { line: 1, column: 1, offsetStart: 0, offsetEnd: 0, message: 'empty input' },
+    };
   }
   try {
     const raw = parseRaw(src);
     const w = walk(raw);
-    const stats: Stats = { keys: w.keys, depth: w.depth, bytes: new TextEncoder().encode(src).length };
+    const stats: Stats = {
+      keys: w.keys,
+      depth: w.depth,
+      bytes: new TextEncoder().encode(src).length,
+    };
     const dup = firstDuplicateKey(src);
     const notices = dup ? [`Duplicate key '${dup}' — kept last value`] : undefined;
     return { ok: true, output: '', stats, notices };

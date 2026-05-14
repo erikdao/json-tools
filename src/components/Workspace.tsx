@@ -1,14 +1,15 @@
 // src/components/Workspace.tsx
-import { useState, useEffect, useRef } from 'preact/hooks';
-import type { BeautifyOptions, JsonError, Tool, Result, TreeNode } from '@/lib/json/types';
-import { beautify, minify, validate, buildTree } from '@/lib/json';
-import { makeEditor } from '@/lib/editor';
+
 import type { EditorView } from '@codemirror/view';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { makeEditor } from '@/lib/editor';
+import { readFiles } from '@/lib/fileInput';
+import { beautify, buildTree, minify, validate } from '@/lib/json';
+import type { BeautifyOptions, JsonError, Result, Tool, TreeNode } from '@/lib/json/types';
+import { clearState, loadState, saveState } from '@/lib/storage';
 import StatusBar from './StatusBar';
 import ToolOptions from './ToolOptions';
 import TreeExplorer from './TreeExplorer';
-import { readFiles } from '@/lib/fileInput';
-import { loadState, saveState, clearState } from '@/lib/storage';
 
 const FIVE_MB = 5 * 1024 * 1024;
 const FIFTY_MB = 50 * 1024 * 1024;
@@ -48,7 +49,7 @@ export default function Workspace({ tool }: Props) {
       setInput(s.input);
       setOpts(s.options);
       inputView.current?.dispatch({
-        changes: { from: 0, to: inputView.current.state.doc.length, insert: s.input }
+        changes: { from: 0, to: inputView.current.state.doc.length, insert: s.input },
       });
     }
   }, []);
@@ -65,7 +66,11 @@ export default function Workspace({ tool }: Props) {
 
   useEffect(() => {
     if (!outputHost.current) return;
-    outputView.current = makeEditor(outputHost.current, { value: '', readOnly: true, ariaLabel: 'Output JSON' });
+    outputView.current = makeEditor(outputHost.current, {
+      value: '',
+      readOnly: true,
+      ariaLabel: 'Output JSON',
+    });
     return () => outputView.current?.destroy();
   }, []);
 
@@ -102,9 +107,12 @@ export default function Workspace({ tool }: Props) {
 
   function runTool(tool: Tool, src: string, opts: BeautifyOptions): Result {
     switch (tool) {
-      case 'beautify': return beautify(src, opts);
-      case 'minify':   return minify(src);
-      case 'validate': return validate(src);
+      case 'beautify':
+        return beautify(src, opts);
+      case 'minify':
+        return minify(src);
+      case 'validate':
+        return validate(src);
       case 'parse': {
         const r = buildTree(src);
         return r.ok
@@ -116,10 +124,13 @@ export default function Workspace({ tool }: Props) {
 
   const setInputFromFile = async (files: FileList | File[]) => {
     const r = await readFiles(files);
-    if (!r.ok) { setStatus(r.reason); return; }
+    if (!r.ok) {
+      setStatus(r.reason);
+      return;
+    }
     setInput(r.content);
     inputView.current?.dispatch({
-      changes: { from: 0, to: inputView.current.state.doc.length, insert: r.content }
+      changes: { from: 0, to: inputView.current.state.doc.length, insert: r.content },
     });
     setStatus(r.extraFiles > 0 ? `Multiple files dropped — using ${r.name}` : `loaded ${r.name}`);
   };
@@ -138,7 +149,11 @@ export default function Workspace({ tool }: Props) {
   };
 
   const run = () => {
-    if (bytes > FIFTY_MB && !confirm(`This input is ${(bytes/1024/1024).toFixed(0)} MB. Proceed?`)) return;
+    if (
+      bytes > FIFTY_MB &&
+      !confirm(`This input is ${(bytes / 1024 / 1024).toFixed(0)} MB. Proceed?`)
+    )
+      return;
     if (tool === 'parse') {
       const r = buildTree(input);
       if (r.ok) {
@@ -163,9 +178,10 @@ export default function Workspace({ tool }: Props) {
     if (r.ok) {
       setOutput(r.output);
       setError(null);
-      if (tool === 'validate') setStatus(`valid · ${r.stats.keys} keys · depth ${r.stats.depth} · ${r.stats.bytes} B`);
+      if (tool === 'validate')
+        setStatus(`valid · ${r.stats.keys} keys · depth ${r.stats.depth} · ${r.stats.bytes} B`);
       else setStatus(`${tool}d · ${r.stats.bytes} B`);
-      if (r.notices?.length) setStatus((s) => `${s} · ${r.notices!.join(' · ')}`);
+      if (r.notices?.length) setStatus((s) => `${s} · ${r.notices?.join(' · ')}`);
     } else {
       setOutput('');
       setError(r.error);
@@ -182,10 +198,11 @@ export default function Workspace({ tool }: Props) {
 
   const jumpToError = () => {
     const v = inputView.current;
-    if (v && error) v.dispatch({
-      selection: { anchor: error.offsetStart, head: error.offsetEnd },
-      scrollIntoView: true,
-    });
+    if (v && error)
+      v.dispatch({
+        selection: { anchor: error.offsetStart, head: error.offsetEnd },
+        scrollIntoView: true,
+      });
     v?.focus();
   };
 
@@ -221,7 +238,7 @@ export default function Workspace({ tool }: Props) {
         setError(null);
         setStatus('cleared');
         inputView.current?.dispatch({
-          changes: { from: 0, to: inputView.current.state.doc.length, insert: '' }
+          changes: { from: 0, to: inputView.current.state.doc.length, insert: '' },
         });
       }
     };
@@ -232,11 +249,15 @@ export default function Workspace({ tool }: Props) {
   return (
     <div class="flex flex-col flex-1 min-h-0 border border-[var(--border)] rounded-md overflow-hidden">
       {bytes > FIVE_MB && (
-        <div class="text-xs text-[var(--amber)] px-3 py-1.5 border-b" style="border-color: var(--border)">
+        <div
+          class="text-xs text-[var(--amber)] px-3 py-1.5 border-b"
+          style="border-color: var(--border)"
+        >
           Large payload ({(bytes / 1024 / 1024).toFixed(1)} MB) — operation may take a moment.
         </div>
       )}
       <div class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_56px_minmax(0,1fr)] gap-0">
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: CodeMirror inside owns focus/keyboard; the wrapper only forwards drag-drop events */}
         <div
           ref={inputHost}
           onDrop={(e) => {
@@ -248,19 +269,26 @@ export default function Workspace({ tool }: Props) {
         />
         <div class="flex items-center justify-center bg-[var(--paper)] border-x border-[var(--border)]">
           <button
+            type="button"
             onClick={run}
             aria-label={`Run ${tool}`}
-            class="text-[var(--amber)] border border-[var(--amber)] px-2 py-2 [writing-mode:vertical-rl] text-xs tracking-widest">
+            class="text-[var(--amber)] border border-[var(--amber)] px-2 py-2 [writing-mode:vertical-rl] text-xs tracking-widest"
+          >
             {tool.toUpperCase()} ▶
           </button>
         </div>
         <div class="flex flex-col min-h-0">
-          {tool === 'parse'
-            ? <div class="flex-1 min-h-0 bg-[var(--editor)] overflow-auto">{tree && <TreeExplorer tree={tree} />}</div>
-            : <div ref={outputHost} class="flex-1 min-h-0 overflow-hidden" />}
+          {tool === 'parse' ? (
+            <div class="flex-1 min-h-0 bg-[var(--editor)] overflow-auto">
+              {tree && <TreeExplorer tree={tree} />}
+            </div>
+          ) : (
+            <div ref={outputHost} class="flex-1 min-h-0 overflow-hidden" />
+          )}
           <div class="flex gap-2 text-xs px-3 py-1.5 border-t" style="border-color: var(--border)">
             <div class="flex border border-[var(--border)] rounded">
               <button
+                type="button"
                 onClick={copy}
                 disabled={!output}
                 aria-label="Copy output"
@@ -269,6 +297,7 @@ export default function Workspace({ tool }: Props) {
                 copy
               </button>
               <button
+                type="button"
                 onClick={download}
                 disabled={!output}
                 aria-label="Download output"
@@ -280,7 +309,10 @@ export default function Workspace({ tool }: Props) {
           </div>
         </div>
       </div>
-      <div class="flex items-center justify-between px-3 py-1.5 border-t" style="border-color: var(--border)">
+      <div
+        class="flex items-center justify-between px-3 py-1.5 border-t"
+        style="border-color: var(--border)"
+      >
         <div class="flex items-center gap-4">
           <input
             type="file"
@@ -291,19 +323,24 @@ export default function Workspace({ tool }: Props) {
           />
           <div class="flex border border-[var(--border)] rounded text-xs">
             <button
+              type="button"
               onClick={() => fileRef.current?.click()}
               aria-label="Upload JSON file"
               class="px-2 py-0.5 text-[var(--muted)] hover:text-[var(--amber)]"
             >
               upload file
             </button>
-            <button onClick={() => {
-              clearState();
-              setInput(''); setOutput(''); setError(null);
-              inputView.current?.dispatch({
-                changes: { from: 0, to: inputView.current.state.doc.length, insert: '' }
-              });
-            }}
+            <button
+              type="button"
+              onClick={() => {
+                clearState();
+                setInput('');
+                setOutput('');
+                setError(null);
+                inputView.current?.dispatch({
+                  changes: { from: 0, to: inputView.current.state.doc.length, insert: '' },
+                });
+              }}
               aria-label="Clear input"
               class="px-2 py-0.5 border-l border-[var(--border)] text-[var(--muted)] hover:text-[var(--amber)]"
             >

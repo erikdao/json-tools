@@ -1,10 +1,14 @@
 // tests/unit/lib/errors.test.ts
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { normalizeJsonError } from '@/lib/json/errors';
 
 function parseError(src: string) {
-  try { JSON.parse(src); throw new Error('expected throw'); }
-  catch (e) { return normalizeJsonError(src, e as Error); }
+  try {
+    JSON.parse(src);
+    throw new Error('expected throw');
+  } catch (e) {
+    return normalizeJsonError(src, e as Error);
+  }
 }
 
 describe('normalizeJsonError', () => {

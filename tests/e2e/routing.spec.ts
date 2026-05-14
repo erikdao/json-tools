@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 test('?indent=tab applies on direct load', async ({ page }) => {
   await page.goto('/beautify?indent=tab&sort=1');
