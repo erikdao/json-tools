@@ -23,6 +23,7 @@ export function makeEditor(parent: HTMLElement, opts: { value: string; readOnly?
       doc: opts.value,
       extensions: [
         lineNumbers(), lintGutter(), history(), bracketMatching(), drawSelection(), highlightActiveLine(),
+        EditorView.lineWrapping,
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         json(),
         linter(jsonParseLinter()),

@@ -230,7 +230,7 @@ export default function Workspace({ tool }: Props) {
   }, [run]);
 
   return (
-    <div class="grid grid-cols-1 md:grid-cols-[1fr_56px_1fr] gap-0 border border-[var(--border)] rounded-md overflow-hidden">
+    <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_56px_minmax(0,1fr)] gap-0 border border-[var(--border)] rounded-md overflow-hidden">
       {bytes > FIVE_MB && (
         <div class="text-xs text-[var(--amber)] px-3 py-1.5 border-b" style="border-color: var(--border)">
           Large payload ({(bytes / 1024 / 1024).toFixed(1)} MB) — operation may take a moment.
