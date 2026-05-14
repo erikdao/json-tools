@@ -256,7 +256,7 @@ export default function Workspace({ tool }: Props) {
           Large payload ({(bytes / 1024 / 1024).toFixed(1)} MB) — operation may take a moment.
         </div>
       )}
-      <div class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_56px_minmax(0,1fr)] gap-0">
+      <div class="flex-1 min-h-0 grid grid-cols-1 grid-rows-[1fr_auto_1fr] gap-0 md:grid-cols-[minmax(0,1fr)_56px_minmax(0,1fr)] md:grid-rows-1">
         {/* biome-ignore lint/a11y/noStaticElementInteractions: CodeMirror inside owns focus/keyboard; the wrapper only forwards drag-drop events */}
         <div
           ref={inputHost}
@@ -267,12 +267,12 @@ export default function Workspace({ tool }: Props) {
           onDragOver={(e) => e.preventDefault()}
           class="min-h-0 overflow-hidden bg-[var(--editor)]"
         />
-        <div class="flex items-center justify-center bg-[var(--paper)] border-x border-[var(--border)]">
+        <div class="flex items-center justify-center bg-[var(--paper)] border-y py-2 border-[var(--border)] md:border-y-0 md:border-x md:py-0">
           <button
             type="button"
             onClick={run}
             aria-label={`Run ${tool}`}
-            class="text-[var(--amber)] border border-[var(--amber)] px-2 py-2 [writing-mode:vertical-rl] text-xs tracking-widest"
+            class="text-[var(--amber)] border border-[var(--amber)] px-3 py-1 text-xs tracking-widest md:px-2 md:py-2 md:[writing-mode:vertical-rl]"
           >
             {tool.toUpperCase()} ▶
           </button>
